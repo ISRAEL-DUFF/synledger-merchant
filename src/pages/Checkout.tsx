@@ -76,7 +76,6 @@ const Checkout = () => {
 
   // Fetch payment details if paymentId is present
   useEffect(() => {
-    // if (!isOpen) return;
 
     const fetchPaymentDetails = async () => {
       if (!paymentId) return;

@@ -161,10 +161,30 @@ interface ExchangeRateResponse {
     expiresAt: number;
 }
 
-export function useExchangeRate(token: string = 'USDT', currency: string = 'NGN') {
+interface ExchangeRateCalculatedResponse {
+    amountNGN: number;
+    amountCrypto: number;
+    rate: number;
+    fee: number;
+    total: number;
+    token: string;
+    feePercentage: number;
+    feeCap: number;
+}
+
+export function useExchangeRate(token: string = 'USDT') {
     return useQuery({
-        queryKey: ['exchange-rate', token, currency],
-        queryFn: () => api.get<ExchangeRateResponse>(`/exchange-rate/current/${currency}`),
+        queryKey: ['exchange-rate', token],
+        queryFn: () => api.get<ExchangeRateResponse>(`/exchange-rate/current/${token}`),
+        refetchInterval: 60000, // Refresh every 60 seconds
+    });
+}
+
+export function useExchangeRateCalculated(amountNGN: number, token: string = 'USDT') {
+    return useQuery({
+        queryKey: ['exchange-rate-calculated', amountNGN, token],
+        queryFn: () => api.get<ExchangeRateCalculatedResponse>(`/exchange-rate/calculate/${amountNGN}?token=${token}`),
+        enabled: amountNGN > 0,
         refetchInterval: 60000, // Refresh every 60 seconds
     });
 }
