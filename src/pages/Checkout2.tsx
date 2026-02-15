@@ -19,7 +19,7 @@ import { useEscrow } from '@/hooks/useEscrow';
 import { buildAndSignPayment } from '@/lib/paymentHelper';
 import { API_URL } from '@/lib/api';
 import { ChainType } from '@/hooks/useWallet';
-import { useAccount } from 'wagmi';
+import { useAccount, useSwitchChain } from 'wagmi';
 
 interface PaymentData {
     merchantName: string;
@@ -54,7 +54,8 @@ let BACKEND_URL = API_URL;
 const Checkout = () => {
     const [searchParams] = useSearchParams();
     const { open } = useAppKit();
-    const { address, isConnected } = useAccount();
+    const { address, isConnected, chainId: currentChainId } = useAccount();
+    const { switchChainAsync } = useSwitchChain();
     const { disconnect } = useDisconnect();
     const tokenTransfer = useTokenTransfer();
 
@@ -111,10 +112,20 @@ const Checkout = () => {
                     reference: data.payment.reference,
                     email: data.payment.email,
                     description: data.payment.metadata?.description,
-                    publicKey: "pk_test_placeholder", // Backend should probably return this too if needed
+                    publicKey: "pk_test_placeholder",
                     callbackUrl: data.payment.metadata?.callbackUrl || "https://merchant.com/verify",
                     metadata: data.payment.metadata || {}
                 });
+
+                // Auto-select chain and token for merchant-initiated payments
+                if (data.payment.chain) {
+                    const chain = chains.find(c => c.id === data.payment.chain);
+                    if (chain) {
+                        setSelectedChain(chain);
+                        setSelectedToken(data.paymentIntent?.tokenSymbol || 'USDT');
+                        setStep('wallet-connect'); // Go straight to wallet connect or payment if connected
+                    }
+                }
 
             } catch (err: any) {
                 console.error('Error fetching payment:', err);
@@ -313,7 +324,12 @@ const Checkout = () => {
             let pId = '';
             let pData;
 
-            if (paymentId && fetchedPaymentData) {
+            // Check if we need to re-initialize due to chain/token change
+            const isFreshSelection = !fetchedPaymentData || !fetchedPaymentData.payment || !fetchedPaymentData.paymentIntent ||
+                fetchedPaymentData.payment.chain !== params.chain ||
+                fetchedPaymentData.paymentIntent?.tokenSymbol !== selectedToken;
+
+            if (paymentId && fetchedPaymentData && !isFreshSelection) {
                 pId = paymentId;
                 pData = fetchedPaymentData;
 
@@ -321,7 +337,8 @@ const Checkout = () => {
                     throw new Error('Payment onchain reference not found');
                 }
             } else {
-                // 1. Call backend to initiate payment
+                // 1. Call backend to initiate payment with CURRENT selections
+                console.log('🔄 Initializing payment with selections:', { chain: params.chain, token: selectedToken });
                 const response = await fetch(`${BACKEND_URL}/checkout/payment/initialize-by-slug/${slug}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -329,11 +346,11 @@ const Checkout = () => {
                         chain: params.chain,
                         tokenSymbol: selectedToken,
                         fromAddress: address,
-                        reference: paymentData.reference,
-                        callbackUrl: 'https://merchant.com/verify',
-                        metadata: {
+                        reference: paymentData?.reference || `TXN-${Date.now()}`,
+                        callbackUrl: paymentData?.callbackUrl || 'https://merchant.com/verify',
+                        metadata: paymentData?.metadata || {
                             orderId: 'ORD-12345',
-                            customerName: 'John Doe'
+                            customerName: 'Guest Customer'
                         }
                     })
                 });
@@ -372,6 +389,19 @@ const Checkout = () => {
             // 2. Create escrow on-chain using standardized helper
             const contractByChain = getContractByName(params.chain);
             console.log("CONTRACT BY CHAIN>>>>>>>>>", params.chain, contractByChain, selectedToken);
+
+            toast.loading('Preparing transaction...');
+
+            // Pre-flight check: Ensure wallet is on the correct chain
+            if (['ethereum', 'arbitrum', 'base'].includes(params.chain)) {
+                const targetChainId = getEnabledChains().find(c => c.id === params.chain)?.chainId[isTestnet() ? 'testnet' : 'mainnet'];
+                if (currentChainId !== targetChainId) {
+                    toast.dismiss();
+                    toast.error(`Please switch your wallet to ${params.chain} network`);
+                    await switchChainAsync({ chainId: targetChainId as number });
+                    return;
+                }
+            }
 
             const result = await buildAndSignPayment({
                 chain: params.chain,
@@ -590,9 +620,22 @@ const Checkout = () => {
                                 {chains.map((chain) => (
                                     <button
                                         key={chain.id}
-                                        onClick={() => {
+                                        onClick={async () => {
                                             setSelectedChain(chain);
-                                            setStep('wallet-connect');
+
+                                            if (isConnected) {
+                                                // If it's an EVM chain, ensure we are on the right network
+                                                if (['ethereum', 'arbitrum', 'base'].includes(chain.id)) {
+                                                    const targetChainId = getEnabledChains().find(c => c.id === chain.id)?.chainId[isTestnet() ? 'testnet' : 'mainnet'];
+                                                    if (currentChainId !== targetChainId) {
+                                                        console.log(`🔄 Switching to ${chain.name} (Chain ID: ${targetChainId})...`);
+                                                        await switchChainAsync({ chainId: targetChainId as number });
+                                                    }
+                                                }
+                                                setStep('payment');
+                                            } else {
+                                                setStep('wallet-connect');
+                                            }
                                         }}
                                         className={`w-full p-4 rounded-xl border-2 transition-all text-left hover:border-primary hover:shadow-md ${chain.popular ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent/50'
                                             }`}
@@ -747,8 +790,8 @@ const Checkout = () => {
                                 </div>
                             )}
 
-                            {/* Token Selector */}
-                            {selectedChain && selectedChain.tokens.length > 1 && (
+                            {/* Token Selector - Hide if paymentId is present (merchant pre-selected) */}
+                            {!paymentId && selectedChain && selectedChain.tokens.length > 1 && (
                                 <div className="bg-muted rounded-xl p-4 border border-border">
                                     <div className="text-sm text-muted-foreground mb-2">Select Token</div>
                                     <div className="flex gap-2">

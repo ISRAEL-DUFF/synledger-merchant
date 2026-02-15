@@ -3,7 +3,7 @@
 // Copied and adapted from frontend-v2.1
 
 import { parseUnits, encodeFunctionData, Hash } from 'viem';
-import { SupportedChain, TokenSymbol } from '@/lib/chains-config';
+import { SupportedChain, TokenSymbol, getCurrentChainId } from '@/lib/chains-config';
 import { getContractByName, ABIS } from '@/lib/contracts';
 import { ethers } from 'ethers';
 
@@ -303,7 +303,7 @@ async function checkAllowance(
 
     try {
         const data = encodeFunctionData({
-            abi: ERC20_ABI,
+            abi: ERC20_ABI as any,
             functionName: 'allowance',
             args: [ownerAddress as `0x${string}`, spenderAddress as `0x${string}`],
         });
@@ -345,11 +345,19 @@ async function approveToken(
     }
 
     try {
+        const expectedChainId = getCurrentChainId(chain);
+        const currentChainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+        const currentChainId = parseInt(currentChainIdHex, 16);
+
+        if (expectedChainId !== currentChainId) {
+            throw new Error(`Wrong network: Wallet is on chain ${currentChainId}, but ${chain} (chain ${expectedChainId}) is required.`);
+        }
+
         const decimals = 6;
         const amountInWei = parseUnits(amount, decimals);
 
         const data = encodeFunctionData({
-            abi: ERC20_ABI,
+            abi: ERC20_ABI as any,
             functionName: 'approve',
             args: [spenderAddress as `0x${string}`, amountInWei],
         });
@@ -383,13 +391,24 @@ async function signAndSendTransaction(
     tx: any,
     chain: SupportedChain
 ): Promise<string | null> {
-    console.log('✍️ Requesting signature for transaction...');
+    console.log('✍️ Requesting signature for transaction...', {
+        tx,
+        chain
+    });
 
     try {
         // For EVM chains
         if (['ethereum', 'arbitrum', 'base'].includes(chain)) {
             if (!window.ethereum) {
                 throw new Error('Wallet not available');
+            }
+
+            const expectedChainId = getCurrentChainId(chain);
+            const currentChainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+            const currentChainId = parseInt(currentChainIdHex, 16);
+
+            if (expectedChainId !== currentChainId) {
+                throw new Error(`Wrong network: Wallet is on chain ${currentChainId}, but ${chain} (chain ${expectedChainId}) is required.`);
             }
 
             const txHash = await window.ethereum.request({
