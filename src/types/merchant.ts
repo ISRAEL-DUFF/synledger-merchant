@@ -45,6 +45,7 @@ export interface MerchantPayment {
   status: PaymentStatus;
   escrowId?: string;
   chain?: ChainType;
+  token?: string;
   cryptoAmount?: string;
   txHash?: string;
   paidAt?: string;

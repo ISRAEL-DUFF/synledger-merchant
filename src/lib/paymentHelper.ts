@@ -308,7 +308,7 @@ async function checkAllowance(
             args: [ownerAddress as `0x${string}`, spenderAddress as `0x${string}`],
         });
 
-        const result = await window.ethereum.request({
+        const result = await (window.ethereum as any).request({
             method: 'eth_call',
             params: [
                 {
@@ -411,7 +411,7 @@ async function signAndSendTransaction(
                 throw new Error(`Wrong network: Wallet is on chain ${currentChainId}, but ${chain} (chain ${expectedChainId}) is required.`);
             }
 
-            const txHash = await window.ethereum.request({
+            const txHash = await (window.ethereum as any).request({
                 method: 'eth_sendTransaction',
                 params: [tx],
             });

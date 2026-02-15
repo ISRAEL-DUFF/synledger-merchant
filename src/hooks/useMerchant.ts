@@ -7,9 +7,9 @@ import { toast } from 'sonner';
 interface AnalyticsData {
     totalRevenue: number;
     totalPayments: number;
-    successRate: string;
+    successRate: number;
     pendingAmount: number;
-    chartData: Array<{ date: string; amount: number }>;
+    chartData: Array<{ date: string; amount: number; count: number }>;
 }
 
 interface PaymentsResponse {
