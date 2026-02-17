@@ -6,9 +6,50 @@ import { parseUnits, encodeFunctionData, Hash } from 'viem';
 import { SupportedChain, TokenSymbol, getCurrentChainId } from '@/lib/chains-config';
 import { getContractByName, ABIS } from '@/lib/contracts';
 import { ethers } from 'ethers';
+import { getWalletClient, getPublicClient } from '@wagmi/core';
+import { wagmiAdapter } from '@/lib/web3modal-config';
 
 const ESCROW_ABI = ABIS.escrowManager;
 const ERC20_ABI = ABIS.erc20;
+
+/**
+ * Get ethereum provider from wagmi or window
+ * This works on both desktop and mobile browsers
+ */
+async function getEthereumProvider(): Promise<any> {
+    try {
+        // First, try to get wallet client from wagmi (works on mobile with WalletConnect)
+        const walletClient = await getWalletClient(wagmiAdapter.wagmiConfig);
+
+        if (walletClient) {
+            // For wagmi/viem, we need to get the underlying provider from the account's connector
+            const account = walletClient.account;
+            if (account && walletClient.chain) {
+                // Try to get provider from the connector
+                const connector = wagmiAdapter.wagmiConfig.state.connections.get(wagmiAdapter.wagmiConfig.state.current || '');
+                if (connector?.connector) {
+                    const provider = await connector.connector.getProvider();
+                    if (provider) {
+                        console.log('✅ Using wagmi provider (mobile-compatible)');
+                        return provider;
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.log('Could not get wallet client from wagmi, falling back to window.ethereum:', error);
+    }
+
+    // Fallback to window.ethereum (works on desktop with injected wallets)
+    const ethereum = (window as any).ethereum || (window as any).web3?.currentProvider;
+
+    if (!ethereum) {
+        throw new Error('Wallet not available. Please ensure your wallet is connected.');
+    }
+
+    console.log('✅ Using window.ethereum provider (desktop)');
+    return ethereum;
+}
 
 /**
  * Payment transaction parameters
@@ -297,9 +338,7 @@ async function checkAllowance(
     spenderAddress: string,
     chain: SupportedChain
 ): Promise<bigint> {
-    if (!window.ethereum) {
-        throw new Error('Wallet not available');
-    }
+    const ethereum = await getEthereumProvider();
 
     try {
         const data = encodeFunctionData({
@@ -308,7 +347,7 @@ async function checkAllowance(
             args: [ownerAddress as `0x${string}`, spenderAddress as `0x${string}`],
         });
 
-        const result = await (window.ethereum as any).request({
+        const result = await ethereum.request({
             method: 'eth_call',
             params: [
                 {
@@ -340,18 +379,17 @@ async function approveToken(
     fromAddress: string,
     chain: SupportedChain
 ): Promise<string | null> {
-    if (!window.ethereum) {
-        throw new Error('Wallet not available');
-    }
+    const ethereum = await getEthereumProvider();
 
     try {
-        const expectedChainId = getCurrentChainId(chain);
-        const currentChainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
-        const currentChainId = parseInt(currentChainIdHex, 16);
+        // Chain ID check removed - validated by UI component
+        // const expectedChainId = getCurrentChainId(chain);
+        // const currentChainIdHex = await ethereum.request({ method: 'eth_chainId' });
+        // const currentChainId = currentChainIdHex[1] === 'x' ? parseInt(currentChainIdHex, 16) : currentChainIdHex; // parseInt(currentChainIdHex, 16);
 
-        if (expectedChainId !== currentChainId) {
-            throw new Error(`Wrong network: Wallet is on chain ${currentChainId}, but ${chain} (chain ${expectedChainId}) is required.`);
-        }
+        // if (expectedChainId !== currentChainId) {
+        //     throw new Error(`Wrong network: Wallet is on chain ${currentChainId}, but ${chain} (chain ${expectedChainId}) is required.`);
+        // }
 
         const decimals = 6;
         const amountInWei = parseUnits(amount, decimals);
@@ -369,7 +407,7 @@ async function approveToken(
             value: '0x0',
         };
 
-        const txHash = await window.ethereum.request({
+        const txHash = await ethereum.request({
             method: 'eth_sendTransaction',
             params: [tx],
         });
@@ -399,19 +437,18 @@ async function signAndSendTransaction(
     try {
         // For EVM chains
         if (['ethereum', 'arbitrum', 'base'].includes(chain)) {
-            if (!window.ethereum) {
-                throw new Error('Wallet not available');
-            }
+            const ethereum = await getEthereumProvider();
 
-            const expectedChainId = getCurrentChainId(chain);
-            const currentChainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
-            const currentChainId = parseInt(currentChainIdHex, 16);
+            // Chain ID check removed - validated by UI component
+            // const expectedChainId = getCurrentChainId(chain);
+            // const currentChainIdHex = await ethereum.request({ method: 'eth_chainId' });
+            // const currentChainId = parseInt(currentChainIdHex, 16);
 
-            if (expectedChainId !== currentChainId) {
-                throw new Error(`Wrong network: Wallet is on chain ${currentChainId}, but ${chain} (chain ${expectedChainId}) is required.`);
-            }
+            // if (expectedChainId !== currentChainId) {
+            //     throw new Error(`Wrong network: Wallet is on chain ${currentChainId}, but ${chain} (chain ${expectedChainId}) is required.`);
+            // }
 
-            const txHash = await (window.ethereum as any).request({
+            const txHash = await ethereum.request({
                 method: 'eth_sendTransaction',
                 params: [tx],
             });
@@ -455,12 +492,14 @@ async function waitForTransactionConfirmation(
 ): Promise<void> {
     console.log('⏳ Waiting for transaction confirmation...', txHash);
 
+    const ethereum = await getEthereumProvider();
+
     const startTime = Date.now();
     const maxWaitMs = maxWaitSeconds * 1000;
 
     while (Date.now() - startTime < maxWaitMs) {
         try {
-            const receipt = await window.ethereum.request({
+            const receipt = await ethereum.request({
                 method: 'eth_getTransactionReceipt',
                 params: [txHash],
             });

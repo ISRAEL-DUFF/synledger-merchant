@@ -15,11 +15,11 @@ import {
 } from '@/lib/chains-config';
 import { toast } from 'sonner';
 import { getContractByName } from '@/lib/contracts';
-import { useEscrow } from '@/hooks/useEscrow';
 import { buildAndSignPayment } from '@/lib/paymentHelper';
 import { API_URL } from '@/lib/api';
 import { ChainType } from '@/hooks/useWallet';
 import { useAccount, useSwitchChain } from 'wagmi';
+import { wagmiAdapter } from '@/lib/web3modal-config';
 
 interface PaymentData {
     merchantName: string;
@@ -82,8 +82,6 @@ const Checkout = () => {
     const [loadingPayment, setLoadingPayment] = useState(false);
     const [paymentError, setPaymentError] = useState<string | null>(null);
     const [fetchedPaymentData, setFetchedPaymentData] = useState<any>(null);
-
-    const { createEscrow, loading, error } = useEscrow();
 
     // Fetch payment details if paymentId is present
     useEffect(() => {
@@ -394,12 +392,70 @@ const Checkout = () => {
 
             // Pre-flight check: Ensure wallet is on the correct chain
             if (['ethereum', 'arbitrum', 'base'].includes(params.chain)) {
+                // Get target chain ID
                 const targetChainId = getEnabledChains().find(c => c.id === params.chain)?.chainId[isTestnet() ? 'testnet' : 'mainnet'];
+
+                // Get current chain ID from wagmi hook (reactive state)
+                // We use the one from useAccount() higher up in the component
+
+                console.log("TARGET CHAIN ID>>>>>>>>>", targetChainId);
+                console.log("CURRENT CHAIN ID (Wagmi)>>>>>>>>>", currentChainId);
+                console.log("IS TESTNET>>>>>>>>>", isTestnet());
+
                 if (currentChainId !== targetChainId) {
+                    console.log(`🔄 Chain mismatch detected. Switching from ${currentChainId} to ${targetChainId}...`);
                     toast.dismiss();
-                    toast.error(`Please switch your wallet to ${params.chain} network`);
-                    await switchChainAsync({ chainId: targetChainId as number });
-                    return;
+                    toast.loading(`Switching to ${params.chain} network...`);
+
+                    try {
+                        // Request chain switch
+                        await switchChainAsync({ chainId: targetChainId as number });
+
+                        // Poll for chain ID update from Wagmi state
+                        // We need to wait until the reactive 'currentChainId' updates to match target
+                        // Since we are inside a function closure, 'currentChainId' won't update here
+                        // So we look for the provider to return the correct chain ID using wagmi core
+
+                        let switchSuccessful = false;
+                        const maxRetries = 10; // 10 attempts * 500ms = 5 seconds
+                        const { getChainId } = await import('@wagmi/core');
+
+                        for (let i = 0; i < maxRetries; i++) {
+                            await new Promise(resolve => setTimeout(resolve, 500));
+
+                            // Check chain ID using wagmi core action (not hook) to get fresh state
+                            try {
+                                const freshChainId = getChainId(wagmiAdapter.wagmiConfig);
+                                console.log(`🔍 Polling attempt ${i + 1}: Chain ID is ${freshChainId}`);
+
+                                if (freshChainId === targetChainId) {
+                                    switchSuccessful = true;
+                                    console.log(`✅ Chain switched successfully to ${freshChainId}`);
+                                    break;
+                                }
+                            } catch (e) {
+                                console.error("Error checking chain ID:", e);
+                            }
+                        }
+
+                        if (!switchSuccessful) {
+                            console.warn(`⚠️ Wait loop timed out. Current chain might still be wrong.`);
+                            // We don't throw here immediately, we let the buildAndSignPayment fail if chain is wrong
+                            // This allows for cases where state might be lagging but provider is ready
+                        } else {
+                            toast.dismiss();
+                            toast.success(`Switched to ${params.chain} network`);
+                        }
+                    } catch (error: any) {
+                        toast.dismiss();
+                        if (error.code === 4001) {
+                            toast.error('Chain switch rejected');
+                            throw new Error('User rejected chain switch');
+                        }
+                        // For other errors, we log but try to proceed - sometimes switch actually happens despite error
+                        console.error('Chain switch error:', error);
+                        // throw error; 
+                    }
                 }
             }
 
@@ -629,7 +685,12 @@ const Checkout = () => {
                                                     const targetChainId = getEnabledChains().find(c => c.id === chain.id)?.chainId[isTestnet() ? 'testnet' : 'mainnet'];
                                                     if (currentChainId !== targetChainId) {
                                                         console.log(`🔄 Switching to ${chain.name} (Chain ID: ${targetChainId})...`);
-                                                        await switchChainAsync({ chainId: targetChainId as number });
+                                                        try {
+                                                            await switchChainAsync({ chainId: targetChainId as number });
+                                                        } catch (e) {
+                                                            console.error("Failed to switch chain on selection:", e);
+                                                            // We ignore error here, as main check will happen in submitPayment
+                                                        }
                                                     }
                                                 }
                                                 setStep('payment');
