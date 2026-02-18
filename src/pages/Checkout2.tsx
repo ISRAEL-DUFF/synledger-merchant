@@ -78,6 +78,7 @@ const Checkout = () => {
     const urlCallbackUrl = searchParams.get('callbackUrl');
     const urlMerchantName = searchParams.get('merchantName');
     const urlMerchantLogo = searchParams.get('merchantLogo');
+    const urlPublicKey = searchParams.get('publicKey');
 
     const [isOpen, setIsOpen] = useState(false);
     const [selectedToken, setSelectedToken] = useState<TokenSymbol>('USDC'); // TODO: fetch default token via app-config from backend
@@ -342,21 +343,44 @@ const Checkout = () => {
             } else {
                 // 1. Call backend to initiate payment with CURRENT selections
                 console.log('🔄 Initializing payment with selections:', { chain: params.chain, token: selectedToken });
-                const response = await fetch(`${BACKEND_URL}/checkout/payment/initialize-by-slug/${slug}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chain: params.chain,
-                        tokenSymbol: selectedToken,
-                        fromAddress: address,
-                        reference: paymentData?.reference || `TXN-${Date.now()}`,
-                        callbackUrl: paymentData?.callbackUrl || 'https://merchant.com/verify',
-                        metadata: paymentData?.metadata || {
-                            orderId: 'ORD-12345',
-                            customerName: 'Guest Customer'
-                        }
-                    })
-                });
+                let response: Response;
+
+                if (slug) {
+                    response = await fetch(`${BACKEND_URL}/checkout/payment/initialize-by-slug/${slug}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chain: params.chain,
+                            tokenSymbol: selectedToken,
+                            fromAddress: address,
+                            reference: paymentData?.reference || `TXN-${Date.now()}`,
+                            callbackUrl: paymentData?.callbackUrl || 'https://merchant.com/verify',
+                            metadata: paymentData?.metadata || {
+                                orderId: 'ORD-12345',
+                                customerName: 'Guest Customer'
+                            }
+                        })
+                    });
+                } else {
+                    response = await fetch(`${BACKEND_URL}/checkout/payment/initialize`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-public-key': urlPublicKey
+                        },
+                        body: JSON.stringify({
+                            chain: params.chain,
+                            fromAddress: address,
+                            tokenSymbol: selectedToken,
+                            amount: Number(urlAmount),
+                            reference: urlRef || `TXN-${Date.now()}`,
+                            email: urlEmail,
+                            metadata: urlMetadata,
+                            callbackUrl: urlCallbackUrl,
+                        })
+                    });
+                }
+
 
                 if (!response.ok) {
                     throw new Error('Failed to initiate payment');
