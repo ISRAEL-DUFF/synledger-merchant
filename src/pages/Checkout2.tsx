@@ -66,16 +66,21 @@ const Checkout = () => {
     // Parse URL parameters
     const paymentId = searchParams.get('paymentId');
     const slug = searchParams.get('ref');
+
+    // URL Parameters
     const urlAmount = searchParams.get('amount');
-    const urlCurrency = searchParams.get('currency');
-    const urlChain = searchParams.get('chain') as SupportedChain | null;
-    const urlRef = searchParams.get('ref');
-    const urlDesc = searchParams.get('desc');
+    const urlRef = searchParams.get('reference');
+    const urlDesc = searchParams.get('description');
     const urlEmail = searchParams.get('email');
     const urlToken = searchParams.get('token') as TokenSymbol | null;
+    const urlChain = searchParams.get('chain') as SupportedChain | null;
+    const urlMetadata = JSON.parse(searchParams.get('metadata') || '{}');
+    const urlCallbackUrl = searchParams.get('callbackUrl');
+    const urlMerchantName = searchParams.get('merchantName');
+    const urlMerchantLogo = searchParams.get('merchantLogo');
 
     const [isOpen, setIsOpen] = useState(false);
-    const [selectedToken, setSelectedToken] = useState<TokenSymbol>(urlToken || 'USDT'); // TODO: fetch default token via app-config from backend
+    const [selectedToken, setSelectedToken] = useState<TokenSymbol>('USDC'); // TODO: fetch default token via app-config from backend
 
     // Payment Data State
     const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
@@ -103,7 +108,7 @@ const Checkout = () => {
                 setFetchedPaymentData(data);
 
                 setPaymentData({
-                    merchantName: data.merchant.name,
+                    merchantName: data.merchant.businessName,
                     merchantLogo: data.merchant.logo || "https://via.placeholder.com/100x100/4F46E5/FFFFFF?text=TS",
                     amount: data.payment.amount,
                     currency: data.payment.currency,
@@ -150,7 +155,7 @@ const Checkout = () => {
                 setFetchedPaymentData(data);
 
                 setPaymentData({
-                    merchantName: data.merchant.name,
+                    merchantName: data.merchant.businessName,
                     merchantLogo: data.merchant.logo || "https://via.placeholder.com/100x100/4F46E5/FFFFFF?text=TS",
                     amount: data.amount,
                     currency: data.currency,
@@ -176,20 +181,20 @@ const Checkout = () => {
             fetchPaymentLinkBySlug();
         } else {
             // Fallback to URL params if paymentId is missing
-            if (urlAmount && urlCurrency) {
+            if (urlAmount && urlMerchantName) {
                 setPaymentData({
-                    merchantName: "Tech Store Nigeria",
-                    merchantLogo: "https://via.placeholder.com/100x100/4F46E5/FFFFFF?text=TS",
+                    merchantName: urlMerchantName || "Tech Store Nigeria",
+                    merchantLogo: urlMerchantLogo || "https://via.placeholder.com/100x100/4F46E5/FFFFFF?text=TS",
                     amount: parseFloat(urlAmount),
-                    currency: urlCurrency,
+                    currency: "NGN",
                     reference: urlRef || "TXN-" + Date.now(),
                     email: urlEmail || "customer@example.com",
                     description: urlDesc || undefined,
                     publicKey: "pk_test_xxxxxxxxxxxxx",
-                    callbackUrl: "https://merchant.com/verify",
+                    callbackUrl: urlCallbackUrl || "https://merchant.com/verify",
                     metadata: {
-                        orderId: "ORD-12345",
-                        customerName: "John Doe"
+                        orderId: urlMetadata?.orderId || "",
+                        customerName: urlMetadata?.customerName || ""
                     }
                 });
             } else {
@@ -203,7 +208,7 @@ const Checkout = () => {
                 setPaymentError('Invalid payment link. Please provide payment details.');
             }
         }
-    }, [paymentId, urlAmount, urlCurrency, urlRef, urlDesc, urlEmail]);
+    }, [paymentId, urlAmount, urlRef, urlDesc, urlEmail]);
 
     // Build chains from configuration
     const chains: Chain[] = useMemo(() => {
