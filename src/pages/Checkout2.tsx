@@ -79,6 +79,7 @@ const Checkout = () => {
     const urlMerchantName = searchParams.get('merchantName');
     const urlMerchantLogo = searchParams.get('merchantLogo');
     const urlPublicKey = searchParams.get('publicKey');
+    const urlParentOrigin = searchParams.get('parentOrigin');
 
     const [isOpen, setIsOpen] = useState(false);
     const [selectedToken, setSelectedToken] = useState<TokenSymbol>('USDC'); // TODO: fetch default token via app-config from backend
@@ -268,6 +269,21 @@ const Checkout = () => {
     useEffect(() => {
         let interval: NodeJS.Timeout;
 
+        const postMessageBackToParent = (status: 'success' | 'failed') => {
+            if (!urlParentOrigin) return;
+            window.parent.postMessage(
+                {
+                    type: status === 'success' ? 'PAYMENT_SUCCESS' : 'PAYMENT_FAILED',
+                    data: {
+                        reference: intentReference,
+                        status,
+                        amount: paymentData.amount
+                    }
+                },
+                urlParentOrigin // <-- IMPORTANT
+            );
+        };
+
         const checkStatus = async () => {
             if (!intentReference || !isPolling) return;
 
@@ -282,10 +298,12 @@ const Checkout = () => {
                     setStep('success');
                     setIsPolling(false);
                     toast.success('Payment confirmed!');
+                    postMessageBackToParent('success');
                 } else if (data.status === 'FAILED') {
                     setStep('failed');
                     setIsPolling(false);
                     toast.error('Payment failed on backend');
+                    postMessageBackToParent('failed');
                 }
             } catch (err) {
                 console.error("Polling error:", err);
