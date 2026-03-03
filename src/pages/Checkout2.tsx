@@ -20,6 +20,8 @@ import { API_URL } from '@/lib/api';
 import { ChainType } from '@/hooks/useWallet';
 import { useAccount, useSwitchChain } from 'wagmi';
 import { wagmiAdapter } from '@/lib/web3modal-config';
+import { useDepositSession } from '@/hooks/useDepositSession';
+import { DepositAddressView } from '@/components/DepositAddressView';
 
 interface PaymentData {
     merchantName: string;
@@ -63,6 +65,10 @@ const Checkout = () => {
     const [isPolling, setIsPolling] = useState(false);
     const [intentReference, setIntentReference] = useState<string | null>(null);
 
+    // Payment Mode - Auto select 'deposit' for mobile users using user agent check
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const [paymentMode, setPaymentMode] = useState<'wallet' | 'deposit'>(isMobile ? 'deposit' : 'wallet');
+
     // Parse URL parameters
     const paymentId = searchParams.get('paymentId');
     const slug = searchParams.get('ref');
@@ -84,6 +90,7 @@ const Checkout = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [selectedToken, setSelectedToken] = useState<TokenSymbol>('USDC'); // TODO: fetch default token via app-config from backend
 
+    // Deposit Session Hook is moved down
     // Payment Data State
     const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
     const [loadingPayment, setLoadingPayment] = useState(false);
@@ -231,6 +238,19 @@ const Checkout = () => {
 
     const [step, setStep] = useState<Step>('initial');
     const [selectedChain, setSelectedChain] = useState<Chain | null>(preSelectedChain);
+
+    // Deposit Session Hook
+    const {
+        session: depositSession,
+        loading: loadingDeposit,
+        error: depositError,
+        createSession,
+        isTerminalState: isDepositTerminal
+    } = useDepositSession(
+        fetchedPaymentData?.payment?.id,
+        selectedChain?.id,
+        selectedToken
+    );
     const [escrowCreated, setEscrowCreated] = useState(false);
     const [txHash, setTxHash] = useState('');
     const [copied, setCopied] = useState(false);
@@ -714,9 +734,38 @@ const Checkout = () => {
                     {/* Step 1: Chain Selection */}
                     {step === 'initial' && (
                         <div className="space-y-4 animate-slide-up">
+
+                            {/* Payment Mode Toggle */}
+                            <div className="bg-muted p-1 rounded-xl flex gap-1 mb-6 border border-border">
+                                <button
+                                    onClick={() => setPaymentMode('wallet')}
+                                    className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${paymentMode === 'wallet'
+                                        ? 'bg-background shadow-sm text-foreground'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                        }`}
+                                >
+                                    Web3 Wallet
+                                </button>
+                                <button
+                                    onClick={() => setPaymentMode('deposit')}
+                                    className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${paymentMode === 'deposit'
+                                        ? 'bg-background shadow-sm text-foreground'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                        }`}
+                                >
+                                    Send Directly
+                                </button>
+                            </div>
+
                             <div>
-                                <h3 className="text-lg font-semibold text-foreground mb-2">Select Payment Network</h3>
-                                <p className="text-sm text-muted-foreground">Choose the blockchain network for your payment</p>
+                                <h3 className="text-lg font-semibold text-foreground mb-2">
+                                    {paymentMode === 'wallet' ? 'Select Payment Network' : 'Select Deposit Network'}
+                                </h3>
+                                <p className="text-sm text-muted-foreground">
+                                    {paymentMode === 'wallet'
+                                        ? 'Choose the blockchain network for your payment'
+                                        : 'Choose the network to send funds from your exchange/wallet'}
+                                </p>
                             </div>
 
                             <div className="space-y-2">
@@ -726,23 +775,31 @@ const Checkout = () => {
                                         onClick={async () => {
                                             setSelectedChain(chain);
 
-                                            if (isConnected) {
-                                                // If it's an EVM chain, ensure we are on the right network
-                                                if (['ethereum', 'arbitrum', 'base'].includes(chain.id)) {
-                                                    const targetChainId = getEnabledChains().find(c => c.id === chain.id)?.chainId[isTestnet() ? 'testnet' : 'mainnet'];
-                                                    if (currentChainId !== targetChainId) {
-                                                        console.log(`🔄 Switching to ${chain.name} (Chain ID: ${targetChainId})...`);
-                                                        try {
-                                                            await switchChainAsync({ chainId: targetChainId as number });
-                                                        } catch (e) {
-                                                            console.error("Failed to switch chain on selection:", e);
-                                                            // We ignore error here, as main check will happen in submitPayment
+                                            if (paymentMode === 'deposit') {
+                                                setStep('payment');
+                                                // createSession is called by a useEffect or explicitly here:
+                                                // But we need the state to update first. Let's do it in a useEffect below or call it directly:
+                                                // useDepositSession relies on selectedChain.id changing, but createSession needs the latest.
+                                                // Actually, we'll just set step to payment and let the UI button trigger it, or trigger it right away
+                                            } else {
+                                                if (isConnected) {
+                                                    // If it's an EVM chain, ensure we are on the right network
+                                                    if (['ethereum', 'arbitrum', 'base'].includes(chain.id)) {
+                                                        const targetChainId = getEnabledChains().find(c => c.id === chain.id)?.chainId[isTestnet() ? 'testnet' : 'mainnet'];
+                                                        if (currentChainId !== targetChainId) {
+                                                            console.log(`🔄 Switching to ${chain.name} (Chain ID: ${targetChainId})...`);
+                                                            try {
+                                                                await switchChainAsync({ chainId: targetChainId as number });
+                                                            } catch (e) {
+                                                                console.error("Failed to switch chain on selection:", e);
+                                                                // We ignore error here, as main check will happen in submitPayment
+                                                            }
                                                         }
                                                     }
+                                                    setStep('payment');
+                                                } else {
+                                                    setStep('wallet-connect');
                                                 }
-                                                setStep('payment');
-                                            } else {
-                                                setStep('wallet-connect');
                                             }
                                         }}
                                         className={`w-full p-4 rounded-xl border-2 transition-all text-left hover:border-primary hover:shadow-md ${chain.popular ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent/50'
@@ -873,105 +930,150 @@ const Checkout = () => {
                         </div>
                     )}
 
-                    {/* Step 3: Payment Confirmation */}
+                    {/* Step 3: Payment Confirmation / Deposit View */}
                     {step === 'payment' && (
                         <div className="space-y-4 animate-slide-up">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-lg font-semibold text-foreground">Confirm Payment</h3>
-                                <div className="text-sm bg-warning/10 text-warning px-3 py-1 rounded-full font-medium">
-                                    {formatTime(timeLeft)}
-                                </div>
-                            </div>
 
-                            {/* Connected wallet */}
-                            {isConnected && address && (
-                                <div className="bg-muted rounded-xl p-3 border border-border">
+                            {paymentMode === 'wallet' ? (
+                                <>
                                     <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle2 size={16} className="text-success" />
-                                            <span className="text-sm text-muted-foreground">Connected:</span>
+                                        <h3 className="text-lg font-semibold text-foreground">Confirm Payment</h3>
+                                        <div className="text-sm bg-warning/10 text-warning px-3 py-1 rounded-full font-medium">
+                                            {formatTime(timeLeft)}
                                         </div>
-                                        <span className="text-sm font-mono text-foreground">
-                                            {address.slice(0, 6)}...{address.slice(-4)}
-                                        </span>
                                     </div>
-                                </div>
-                            )}
 
-                            {/* Token Selector - Hide if paymentId is present (merchant pre-selected) */}
-                            {!paymentId && selectedChain && selectedChain.tokens.length > 1 && (
-                                <div className="bg-muted rounded-xl p-4 border border-border">
-                                    <div className="text-sm text-muted-foreground mb-2">Select Token</div>
-                                    <div className="flex gap-2">
-                                        {selectedChain.tokens.map((token) => (
+                                    {/* Connected wallet */}
+                                    {isConnected && address && (
+                                        <div className="bg-muted rounded-xl p-3 border border-border">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <CheckCircle2 size={16} className="text-success" />
+                                                    <span className="text-sm text-muted-foreground">Connected:</span>
+                                                </div>
+                                                <span className="text-sm font-mono text-foreground">
+                                                    {address.slice(0, 6)}...{address.slice(-4)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Token Selector - Hide if paymentId is present (merchant pre-selected) */}
+                                    {!paymentId && selectedChain && selectedChain.tokens.length > 1 && (
+                                        <div className="bg-muted rounded-xl p-4 border border-border">
+                                            <div className="text-sm text-muted-foreground mb-2">Select Token</div>
+                                            <div className="flex gap-2">
+                                                {selectedChain.tokens.map((token) => (
+                                                    <button
+                                                        key={token}
+                                                        onClick={() => setSelectedToken(token)}
+                                                        className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${selectedToken === token
+                                                            ? 'bg-primary text-primary-foreground'
+                                                            : 'bg-background border border-border text-foreground hover:border-primary'
+                                                            }`}
+                                                    >
+                                                        {token}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="bg-gradient-to-br from-primary/10 to-secondary/10 rounded-xl p-4 border border-primary/20">
+                                        <div className="text-sm text-muted-foreground mb-1">You will pay</div>
+                                        <div className="text-3xl font-bold text-foreground">{totalCrypto} {selectedToken}</div>
+                                        <div className="text-sm text-muted-foreground mt-1">
+                                            on {selectedChain?.name}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 bg-muted rounded-xl p-4 border border-border">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Exchange Rate</span>
+                                            <span className="font-medium text-foreground">1 {selectedToken} = ₦{(calcData?.rate || exchangeRateData?.effectiveRate || 1420).toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Amount</span>
+                                            <span className="font-medium text-foreground">{cryptoAmount} {selectedToken}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Platform Fee ({calcData?.feePercentage || 1.5}%)</span>
+                                            <span className="font-medium text-foreground">{platformFee} {selectedToken}</span>
+                                        </div>
+                                        <div className="border-t border-border pt-2 flex justify-between">
+                                            <span className="font-semibold text-foreground">Total</span>
+                                            <span className="font-bold text-foreground">{totalCrypto} {selectedToken}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 flex items-start gap-2">
+                                        <AlertCircle className="text-primary flex-shrink-0 mt-0.5" size={16} />
+                                        <div className="text-xs text-primary">
+                                            <p className="font-medium mb-1">Escrow Protection</p>
+                                            <p>Your funds will be held safely until the merchant confirms your payment. If anything goes wrong, you'll get an automatic refund.</p>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={handlePayment}
+                                        disabled={!isConnected}
+                                        className="w-full gradient-primary text-primary-foreground py-4 rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <Wallet size={20} />
+                                        Pay {totalCrypto} {selectedToken}
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            disconnect();
+                                            setStep('wallet-connect');
+                                        }}
+                                        className="w-full text-muted-foreground py-2 text-sm hover:text-foreground"
+                                    >
+                                        Change wallet
+                                    </button>
+                                </>
+                            ) : (
+                                /* Deposit Mode UI */
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-lg font-semibold text-foreground">Send Directly</h3>
+                                    </div>
+
+                                    {!depositSession && !loadingDeposit && !depositError ? (
+                                        <div className="space-y-4 text-center py-6">
+                                            <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <Wallet className="text-primary w-8 h-8" />
+                                            </div>
+                                            <p className="text-muted-foreground mb-6">
+                                                We will generate a unique deposit address on the <strong>{selectedChain?.name}</strong> network.
+                                            </p>
                                             <button
-                                                key={token}
-                                                onClick={() => setSelectedToken(token)}
-                                                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${selectedToken === token
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'bg-background border border-border text-foreground hover:border-primary'
-                                                    }`}
+                                                onClick={createSession}
+                                                className="w-full gradient-primary text-primary-foreground py-4 rounded-xl font-semibold hover:shadow-lg transition-all"
                                             >
-                                                {token}
+                                                Show Deposit Address
                                             </button>
-                                        ))}
-                                    </div>
+                                            <button
+                                                onClick={() => setStep('initial')}
+                                                className="mt-2 text-sm text-muted-foreground hover:text-foreground"
+                                            >
+                                                Change Network
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <DepositAddressView
+                                            session={depositSession}
+                                            loading={loadingDeposit}
+                                            error={depositError}
+                                            currency={selectedToken}
+                                            amount={totalCrypto}
+                                            onRetry={createSession}
+                                            onGoBack={() => setStep('initial')}
+                                        />
+                                    )}
                                 </div>
                             )}
-
-                            <div className="bg-gradient-to-br from-primary/10 to-secondary/10 rounded-xl p-4 border border-primary/20">
-                                <div className="text-sm text-muted-foreground mb-1">You will pay</div>
-                                <div className="text-3xl font-bold text-foreground">{totalCrypto} {selectedToken}</div>
-                                <div className="text-sm text-muted-foreground mt-1">
-                                    on {selectedChain?.name}
-                                </div>
-                            </div>
-
-                            <div className="space-y-2 bg-muted rounded-xl p-4 border border-border">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Exchange Rate</span>
-                                    <span className="font-medium text-foreground">1 {selectedToken} = ₦{(calcData?.rate || exchangeRateData?.effectiveRate || 1420).toLocaleString()}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Amount</span>
-                                    <span className="font-medium text-foreground">{cryptoAmount} {selectedToken}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Platform Fee ({calcData?.feePercentage || 1.5}%)</span>
-                                    <span className="font-medium text-foreground">{platformFee} {selectedToken}</span>
-                                </div>
-                                <div className="border-t border-border pt-2 flex justify-between">
-                                    <span className="font-semibold text-foreground">Total</span>
-                                    <span className="font-bold text-foreground">{totalCrypto} {selectedToken}</span>
-                                </div>
-                            </div>
-
-                            <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 flex items-start gap-2">
-                                <AlertCircle className="text-primary flex-shrink-0 mt-0.5" size={16} />
-                                <div className="text-xs text-primary">
-                                    <p className="font-medium mb-1">Escrow Protection</p>
-                                    <p>Your funds will be held safely until the merchant confirms your payment. If anything goes wrong, you'll get an automatic refund.</p>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={handlePayment}
-                                disabled={!isConnected}
-                                className="w-full gradient-primary text-primary-foreground py-4 rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <Wallet size={20} />
-                                Pay {totalCrypto} {selectedToken}
-                            </button>
-
-                            <button
-                                onClick={() => {
-                                    disconnect();
-                                    setStep('wallet-connect');
-                                }}
-                                className="w-full text-muted-foreground py-2 text-sm hover:text-foreground"
-                            >
-                                Change wallet
-                            </button>
                         </div>
                     )}
 
