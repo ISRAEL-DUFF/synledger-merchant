@@ -10,6 +10,7 @@ interface DepositAddressViewProps {
     error: string | null;
     currency: TokenSymbol;
     amount: string;
+    urlParentOrigin?: string;
     onRetry?: () => void;
     onGoBack?: () => void;
 }
@@ -20,6 +21,7 @@ export const DepositAddressView: React.FC<DepositAddressViewProps> = ({
     error,
     currency,
     amount,
+    urlParentOrigin,
     onRetry,
     onGoBack
 }) => {
@@ -128,6 +130,19 @@ export const DepositAddressView: React.FC<DepositAddressViewProps> = ({
     }
 
     if (status === 'SETTLED') {
+        setTimeout(() => {
+            window.parent.postMessage(
+                {
+                    type: 'PAYMENT_SUCCESS',
+                    data: {
+                        reference: session?.id,
+                        status,
+                        amount: amount
+                    }
+                },
+                urlParentOrigin // <-- IMPORTANT
+            );
+        }, 4000)
         return (
             <div className="py-12 text-center space-y-4 animate-in zoom-in">
                 <div className="mx-auto w-16 h-16 bg-success/10 text-success rounded-full flex items-center justify-center mb-6">

@@ -1145,6 +1145,7 @@ const Checkout = () => {
                                             error={depositError}
                                             currency={selectedToken}
                                             amount={totalCrypto}
+                                            urlParentOrigin={urlParentOrigin}
                                             onRetry={handleCreateSession}
                                             onGoBack={() => setStep('initial')}
                                         />

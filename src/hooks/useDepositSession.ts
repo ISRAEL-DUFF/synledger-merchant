@@ -48,6 +48,7 @@ export function useDepositSession(merchantPaymentId: string | undefined, chain: 
             }
 
             const newSession = await res.json();
+            console.log('Session:>>>>>', newSession)
             setSession(newSession);
         } catch (err: any) {
             console.error('Failed to create deposit session:', err);
@@ -63,44 +64,71 @@ export function useDepositSession(merchantPaymentId: string | undefined, chain: 
 
         // Connect to the deposit-sessions namespace
         const wsUrl = API_URL.replace('/api', ''); // Adjust if API_URL includes /api suffix
+        console.log(`[WebSocket] Connecting to: ${wsUrl}/deposit-sessions for session: ${session.id}`);
+
         const newSocket = io(`${wsUrl}/deposit-sessions`, {
-            reconnectionAttempts: 5,
+            reconnectionAttempts: 10,
             reconnectionDelay: 2000,
+            transports: ['websocket', 'polling'], // Allow fallback to long polling
         });
 
         newSocket.on('connect', () => {
-            console.log('Connected to deposit sessions WebSocket');
+            console.log('[WebSocket] Connected to /deposit-sessions namespace');
             newSocket.emit('subscribe', { sessionId: session.id });
         });
 
+        newSocket.on('connect_error', (error) => {
+            console.error('[WebSocket] Connection error:', error.message);
+        });
+
+        newSocket.on('disconnect', (reason) => {
+            console.warn('[WebSocket] Disconnected:', reason);
+        });
+
         newSocket.on('session.state', (data: DepositSession) => {
-            console.log('Session state updated:', data);
+            console.log('[WebSocket] Session state received:', data);
             setSession(prev => ({ ...prev, ...data }));
         });
 
         newSocket.on('deposit.detected', (data) => {
+            console.log('[WebSocket] Deposit detected:', data);
             toast.success('Deposit detected! Waiting for block confirmations...');
+            setSession(prev => prev ? { ...prev, status: 'DETECTED', detectedTxHash: data.txHash } : null);
+        });
+
+        newSocket.on('deposit.confirming', (data) => {
+            console.log('[WebSocket] Deposit confirming:', data);
+            setSession(prev => prev ? { ...prev, status: 'CONFIRMING', confirmations: data.confirmations, requiredConfirmations: data.required } : null);
         });
 
         newSocket.on('deposit.confirmed', () => {
+            console.log('[WebSocket] Deposit confirmed');
             toast.success('Deposit confirmed on the blockchain!');
+            setSession(prev => prev ? { ...prev, status: 'CONFIRMED' } : null);
         });
 
         newSocket.on('session.settled', () => {
+            console.log('[WebSocket] Session settled');
             toast.success('Payment settled to merchant successfully!');
+            setSession(prev => prev ? { ...prev, status: 'SETTLED' } : null);
         });
 
         newSocket.on('session.expired', () => {
+            console.log('[WebSocket] Session expired');
             toast.error('Deposit session expired.');
+            setSession(prev => prev ? { ...prev, status: 'EXPIRED' } : null);
         });
 
         newSocket.on('session.failed', (data) => {
+            console.log('[WebSocket] Session failed:', data);
             toast.error(`Deposit failed: ${data.reason}`);
+            setSession(prev => prev ? { ...prev, status: 'FAILED', failureReason: data.reason } : null);
         });
 
         setSocket(newSocket);
 
         return () => {
+            console.log('[WebSocket] Cleanup: disconnecting socket');
             newSocket.disconnect();
         };
     }, [session?.id]);
@@ -110,26 +138,29 @@ export function useDepositSession(merchantPaymentId: string | undefined, chain: 
         if (!session?.id || ['SETTLED', 'EXPIRED', 'FAILED'].includes(session.status)) return;
 
         const interval = setInterval(async () => {
-            // If socket is connected, skip polling to save requests
-            if (socket?.connected) return;
-
+            // Keep polling as a backup even if socket says connected
+            // Just in case room subscription or events are not flowing
             try {
-                const res = await fetch(`${API_URL}/checkout/payments/${merchantPaymentId}/deposit-session/status/${session.id}`);
+                const pollUrl = `${API_URL}/checkout/payments/${merchantPaymentId}/deposit-session/status/${session.id}`;
+                const res = await fetch(pollUrl);
+
                 if (res.ok) {
                     const data = await res.json();
-
-                    // Only update if status actually changed to avoid unnecessary re-renders
+                    // Only update if status actually changed or confirmations increased to avoid unnecessary re-renders
                     if (data.status !== session.status || data.confirmations !== session.confirmations) {
+                        console.log('[Polling] Update received:', data);
                         setSession(prev => ({ ...prev, ...data }));
                     }
+                } else {
+                    console.warn(`[Polling] Failed with status ${res.status} for ${pollUrl}`);
                 }
             } catch (err) {
-                console.error('Polling failed:', err);
+                console.error('[Polling] Error:', err);
             }
         }, 5000);
 
         return () => clearInterval(interval);
-    }, [session?.id, session?.status, session?.confirmations, merchantPaymentId, socket?.connected]);
+    }, [session?.id, session?.status, session?.confirmations, merchantPaymentId]);
 
     return {
         session,
