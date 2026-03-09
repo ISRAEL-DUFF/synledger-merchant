@@ -65,9 +65,8 @@ const Checkout = () => {
     const [isPolling, setIsPolling] = useState(false);
     const [intentReference, setIntentReference] = useState<string | null>(null);
 
-    // Payment Mode - Auto select 'deposit' for mobile users using user agent check
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    const [paymentMode, setPaymentMode] = useState<'wallet' | 'deposit'>(isMobile ? 'deposit' : 'wallet');
+    // Payment Mode - both options always available, user can switch freely
+    const [paymentMode, setPaymentMode] = useState<'wallet' | 'deposit'>('wallet');
 
     // Parse URL parameters
     const paymentId = searchParams.get('paymentId');
@@ -199,7 +198,7 @@ const Checkout = () => {
                     reference: urlRef || "TXN-" + Date.now(),
                     email: urlEmail || "customer@example.com",
                     description: urlDesc || undefined,
-                    publicKey: "pk_test_xxxxxxxxxxxxx",
+                    publicKey: urlPublicKey,
                     callbackUrl: urlCallbackUrl || "https://merchant.com/verify",
                     metadata: {
                         orderId: urlMetadata?.orderId || "",
@@ -357,6 +356,78 @@ const Checkout = () => {
         }
     }, [isConnected, step]);
 
+    const initializePayment = async (params: {
+        chain: ChainType;
+        token: string;
+        isForDepositSession?: boolean;
+    }) => {
+        // 1. Call backend to initiate payment with CURRENT selections
+        console.log('🔄 Initializing payment with selections:', { chain: params.chain, token: selectedToken });
+        let response: Response;
+
+        if (!params.isForDepositSession && !address) {
+            throw new Error('Wallet not connected');
+        }
+
+        if (slug) {
+            response = await fetch(`${BACKEND_URL}/checkout/payment/initialize-by-slug/${slug}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chain: params.chain,
+                    tokenSymbol: selectedToken,
+                    fromAddress: address || '0x0000000000000000000000000000000000000000',
+                    reference: paymentData?.reference || `TXN-${Date.now()}`,
+                    callbackUrl: paymentData?.callbackUrl || 'https://merchant.com/verify',
+                    metadata: paymentData?.metadata || {
+                        orderId: 'ORD-12345',
+                        customerName: 'Guest Customer',
+                        isForDepositSession: params.isForDepositSession
+                    }
+                })
+            });
+        } else {
+            response = await fetch(`${BACKEND_URL}/checkout/payment/initialize`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-public-key': urlPublicKey
+                },
+                body: JSON.stringify({
+                    chain: params.chain,
+                    fromAddress: address || '0x0000000000000000000000000000000000000000',
+                    tokenSymbol: selectedToken,
+                    amount: Number(urlAmount),
+                    reference: urlRef || `TXN-${Date.now()}`,
+                    email: urlEmail,
+                    metadata: {
+                        ...urlMetadata,
+                        isForDepositSession: params.isForDepositSession
+                    },
+                    callbackUrl: urlCallbackUrl,
+                })
+            });
+        }
+
+
+        if (!response.ok) {
+            throw new Error('Failed to initiate payment');
+        }
+
+        const data = await response.json();
+        console.log("DATA>>>>>>>>>", data);
+
+        if (!data.payment.id) {
+            throw new Error('Payment ID not found');
+        }
+
+        if (!data.payment.onchainReference) {
+            throw new Error('Payment onchain reference not found');
+        }
+
+        return data;
+    };
+
     const submitPayment = async (params: {
         amount: string;
         chain: ChainType;
@@ -380,76 +451,66 @@ const Checkout = () => {
                 }
             } else {
                 // 1. Call backend to initiate payment with CURRENT selections
-                console.log('🔄 Initializing payment with selections:', { chain: params.chain, token: selectedToken });
-                let response: Response;
+                // console.log('🔄 Initializing payment with selections:', { chain: params.chain, token: selectedToken });
+                // let response: Response;
 
-                if (slug) {
-                    response = await fetch(`${BACKEND_URL}/checkout/payment/initialize-by-slug/${slug}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            chain: params.chain,
-                            tokenSymbol: selectedToken,
-                            fromAddress: address,
-                            reference: paymentData?.reference || `TXN-${Date.now()}`,
-                            callbackUrl: paymentData?.callbackUrl || 'https://merchant.com/verify',
-                            metadata: paymentData?.metadata || {
-                                orderId: 'ORD-12345',
-                                customerName: 'Guest Customer'
-                            }
-                        })
-                    });
-                } else {
-                    response = await fetch(`${BACKEND_URL}/checkout/payment/initialize`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-public-key': urlPublicKey
-                        },
-                        body: JSON.stringify({
-                            chain: params.chain,
-                            fromAddress: address,
-                            tokenSymbol: selectedToken,
-                            amount: Number(urlAmount),
-                            reference: urlRef || `TXN-${Date.now()}`,
-                            email: urlEmail,
-                            metadata: urlMetadata,
-                            callbackUrl: urlCallbackUrl,
-                        })
-                    });
-                }
+                // if (slug) {
+                //     response = await fetch(`${BACKEND_URL}/checkout/payment/initialize-by-slug/${slug}`, {
+                //         method: 'POST',
+                //         headers: { 'Content-Type': 'application/json' },
+                //         body: JSON.stringify({
+                //             chain: params.chain,
+                //             tokenSymbol: selectedToken,
+                //             fromAddress: address,
+                //             reference: paymentData?.reference || `TXN-${Date.now()}`,
+                //             callbackUrl: paymentData?.callbackUrl || 'https://merchant.com/verify',
+                //             metadata: paymentData?.metadata || {
+                //                 orderId: 'ORD-12345',
+                //                 customerName: 'Guest Customer'
+                //             }
+                //         })
+                //     });
+                // } else {
+                //     response = await fetch(`${BACKEND_URL}/checkout/payment/initialize`, {
+                //         method: 'POST',
+                //         headers: {
+                //             'Content-Type': 'application/json',
+                //             'x-public-key': urlPublicKey
+                //         },
+                //         body: JSON.stringify({
+                //             chain: params.chain,
+                //             fromAddress: address,
+                //             tokenSymbol: selectedToken,
+                //             amount: Number(urlAmount),
+                //             reference: urlRef || `TXN-${Date.now()}`,
+                //             email: urlEmail,
+                //             metadata: urlMetadata,
+                //             callbackUrl: urlCallbackUrl,
+                //         })
+                //     });
+                // }
 
 
-                if (!response.ok) {
-                    throw new Error('Failed to initiate payment');
-                }
+                // if (!response.ok) {
+                //     throw new Error('Failed to initiate payment');
+                // }
 
-                const data = await response.json();
-                console.log("DATA>>>>>>>>>", data);
+                // const data = await response.json();
+                // console.log("DATA>>>>>>>>>", data);
 
-                if (!data.payment.id) {
-                    throw new Error('Payment ID not found');
-                }
+                // if (!data.payment.id) {
+                //     throw new Error('Payment ID not found');
+                // }
 
-                if (!data.payment.onchainReference) {
-                    throw new Error('Payment onchain reference not found');
-                }
+                // if (!data.payment.onchainReference) {
+                //     throw new Error('Payment onchain reference not found');
+                // }
+
+                const data = await initializePayment({ chain: params.chain, token: selectedToken });
 
                 pId = data.payment.id;
                 pData = data;
             }
-
-            // const response = await fetch('/api/payments/initiate-payment-intent', {
-            //   method: 'POST',
-            //   headers: { 'Content-Type': 'application/json' },
-            //   body: JSON.stringify({
-            //     amount: parseFloat(params.amount) * 1420, // NGN amount
-            //     token: 'USDT',
-            //     chain: 'arbitrum'
-            //   })
-            // });
-
-            // const paymentData = await response.json();
 
             // 2. Create escrow on-chain using standardized helper
             const contractByChain = getContractByName(params.chain);
@@ -616,6 +677,22 @@ const Checkout = () => {
             }
         }
     };
+
+    const handleCreateSession = async () => {
+        if (!selectedChain || !selectedToken) return;
+
+        if (fetchedPaymentData?.payment?.id) {
+            await createSession({ paymentId: fetchedPaymentData.payment.id });
+            return;
+        }
+
+        const data = await initializePayment({
+            chain: selectedChain.id,
+            token: selectedToken,
+            isForDepositSession: true
+        });
+        await createSession({ paymentId: data.payment.id });
+    }
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
@@ -1049,7 +1126,7 @@ const Checkout = () => {
                                                 We will generate a unique deposit address on the <strong>{selectedChain?.name}</strong> network.
                                             </p>
                                             <button
-                                                onClick={createSession}
+                                                onClick={handleCreateSession}
                                                 className="w-full gradient-primary text-primary-foreground py-4 rounded-xl font-semibold hover:shadow-lg transition-all"
                                             >
                                                 Show Deposit Address
@@ -1068,7 +1145,7 @@ const Checkout = () => {
                                             error={depositError}
                                             currency={selectedToken}
                                             amount={totalCrypto}
-                                            onRetry={createSession}
+                                            onRetry={handleCreateSession}
                                             onGoBack={() => setStep('initial')}
                                         />
                                     )}

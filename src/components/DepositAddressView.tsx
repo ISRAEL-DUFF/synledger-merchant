@@ -26,14 +26,34 @@ export const DepositAddressView: React.FC<DepositAddressViewProps> = ({
     const [copiedAddress, setCopiedAddress] = React.useState(false);
     const [copiedAmount, setCopiedAmount] = React.useState(false);
 
-    const copyToClipboard = (text: string, type: 'address' | 'amount') => {
-        navigator.clipboard.writeText(text);
-        if (type === 'address') {
-            setCopiedAddress(true);
-            setTimeout(() => setCopiedAddress(false), 2000);
-        } else {
-            setCopiedAmount(true);
-            setTimeout(() => setCopiedAmount(false), 2000);
+    const copyToClipboard = async (text: string, type: 'address' | 'amount') => {
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                // Fallback for non-secure contexts
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-9999px";
+                textArea.style.top = "0";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                if (!successful) throw new Error('copy command was unsuccessful');
+            }
+
+            if (type === 'address') {
+                setCopiedAddress(true);
+                setTimeout(() => setCopiedAddress(false), 2000);
+            } else {
+                setCopiedAmount(true);
+                setTimeout(() => setCopiedAmount(false), 2000);
+            }
+        } catch (err) {
+            console.error('Failed to copy: ', err);
         }
     };
 

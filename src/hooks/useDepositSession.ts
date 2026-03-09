@@ -26,14 +26,17 @@ export function useDepositSession(merchantPaymentId: string | undefined, chain: 
     const [socket, setSocket] = useState<Socket | null>(null);
 
     // 1. Create or fetch session when params are ready
-    const createSession = useCallback(async () => {
-        if (!merchantPaymentId || !chain || !token) return;
+    const createSession = useCallback(async (params?: { paymentId?: string }) => {
+        if (!chain || !token) return;
+        if (!params?.paymentId && !merchantPaymentId) return;
+
+        let paymentId = params?.paymentId || merchantPaymentId;
 
         setLoading(true);
         setError(null);
 
         try {
-            const res = await fetch(`${API_URL}/checkout/payments/${merchantPaymentId}/deposit-session`, {
+            const res = await fetch(`${API_URL}/checkout/payments/${paymentId}/deposit-session`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chain, token })
