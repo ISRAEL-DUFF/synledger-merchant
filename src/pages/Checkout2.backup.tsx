@@ -14,6 +14,7 @@ import {
     getWalletsForChain
 } from '@/lib/chains-config';
 import { toast } from 'sonner';
+import { getContractByName } from '@/lib/contracts';
 import { buildAndSignPayment } from '@/lib/paymentHelper';
 import { API_URL } from '@/lib/api';
 import { ChainType } from '@/hooks/useWallet';
@@ -505,24 +506,15 @@ const Checkout = () => {
                 //     throw new Error('Payment onchain reference not found');
                 // }
 
-                const data = await initializePayment({
-                    chain: params.chain,
-                    token: selectedToken,
-                    isForDepositSession: true,
-                });
+                const data = await initializePayment({ chain: params.chain, token: selectedToken });
 
                 pId = data.payment.id;
                 pData = data;
             }
 
-            // 2. Ensure we have a deposit session (idempotent backend behavior)
-            let session = depositSession;
-            if (!session || session.chain !== params.chain || session.token !== selectedToken) {
-                session = await createSession({ paymentId: pId });
-            }
-            if (!session?.depositAddress) {
-                throw new Error('Could not generate deposit address for this payment');
-            }
+            // 2. Create escrow on-chain using standardized helper
+            const contractByChain = getContractByName(params.chain);
+            console.log("CONTRACT BY CHAIN>>>>>>>>>", params.chain, contractByChain, selectedToken);
 
             toast.loading('Preparing transaction...');
 
@@ -598,12 +590,11 @@ const Checkout = () => {
             const result = await buildAndSignPayment({
                 chain: params.chain,
                 tokenSymbol: selectedToken,
-                amount: session.expectedAmount,
+                amount: params.amount,
                 fromAddress: address!,
-                toAddress: session.depositAddress,
+                toAddress: contractByChain.escrowManager,
                 reference: pData.payment.onchainReference,
                 category: params.category,
-                paymentMode: 'direct',
             });
 
             if (!result.success || !result.txHash) {
@@ -612,11 +603,29 @@ const Checkout = () => {
             console.log("RESULT>>>>>>>>>", result);
 
 
-            toast.dismiss();
-            return { result, session };
+            // 3. Confirm escrow creation with backend
+            const response = await fetch(`${BACKEND_URL}/payment-intents/${pId}/checkout-submit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    reference: pData.payment.onchainReference,
+                    // txHash: result.txHash,
+                    signedTx: result.txHash
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to confirm payment');
+            }
+
+            alert('Payment initiated successfully!');
+
+            // Reset form or redirect
+
+            return { result, pData };
         } catch (err) {
             console.error('Payment failed:', err);
-            toast.dismiss();
+            alert('Payment failed. Please try again.');
             setStep('failed');
             throw err;
         }
@@ -643,7 +652,7 @@ const Checkout = () => {
             //   totalCrypto
             // );
 
-            const { result } = await submitPayment({
+            const { result, pData } = await submitPayment({
                 amount: totalCrypto,
                 chain: selectedChain.id,
                 category: 'payment',
@@ -653,12 +662,11 @@ const Checkout = () => {
                 throw new Error('Transaction failed');
             }
 
-            setTxHash(result.txHash);
-            // Reuse the existing deposit-session tracking UI after user signs tx
-            setPaymentMode('deposit');
-            setStep('payment');
+            setStep('processing');
+            setIsPolling(true);
+            setIntentReference(pData.payment.onchainReference);
 
-            toast.success('Transfer sent. Waiting for on-chain detection...');
+            toast.success('Payment initiated! Waiting for confirmation...');
         } catch (error: any) {
             console.error('Payment error:', error);
             setStep('failed');
@@ -1078,8 +1086,8 @@ const Checkout = () => {
                                     <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 flex items-start gap-2">
                                         <AlertCircle className="text-primary flex-shrink-0 mt-0.5" size={16} />
                                         <div className="text-xs text-primary">
-                                            <p className="font-medium mb-1">Direct Deposit</p>
-                                            <p>Your wallet will transfer directly to a unique one-time deposit address for this payment.</p>
+                                            <p className="font-medium mb-1">Escrow Protection</p>
+                                            <p>Your funds will be held safely until the merchant confirms your payment. If anything goes wrong, you'll get an automatic refund.</p>
                                         </div>
                                     </div>
 
@@ -1163,59 +1171,21 @@ const Checkout = () => {
                                 <h3 className="text-xl font-bold text-foreground mb-2">
                                     {tokenTransfer.status === 'pending'
                                         ? 'Confirm in Wallet...'
-                                        : txHash && paymentMode === 'wallet'
-                                            ? 'Transfer Sent!'
-                                            : escrowCreated
-                                                ? 'Transaction Submitted!'
-                                                : 'Processing Payment...'}
+                                        : escrowCreated
+                                            ? 'Transaction Submitted!'
+                                            : 'Processing Payment...'}
                                 </h3>
                                 <p className="text-muted-foreground">
                                     {tokenTransfer.status === 'pending'
                                         ? 'Please confirm the transaction in your wallet'
-                                        : txHash && paymentMode === 'wallet'
-                                            ? 'Waiting for on-chain detection...'
-                                            : escrowCreated
-                                                ? 'Waiting for blockchain confirmation'
-                                                : `Preparing your ${selectedToken} transfer`
+                                        : escrowCreated
+                                            ? 'Waiting for blockchain confirmation'
+                                            : `Preparing your ${selectedToken} transfer`
                                     }
                                 </p>
                             </div>
 
-                            {txHash && paymentMode === 'wallet' && (
-                                <div className="bg-success/10 border border-success/20 rounded-lg p-4 animate-fade-in">
-                                    <div className="flex items-center gap-2 text-success text-sm mb-3">
-                                        <Check size={16} />
-                                        <span className="font-medium">Transaction Confirmed</span>
-                                    </div>
-                                    <div className="text-xs text-muted-foreground mb-2">Transaction Hash:</div>
-                                    <div className="bg-muted rounded px-3 py-2 text-xs text-foreground break-all font-mono mb-3">
-                                        {txHash}
-                                    </div>
-                                    <a
-                                        href={getBlockExplorerUrl(selectedChain, txHash)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:shadow-lg transition-all"
-                                    >
-                                        View on Explorer <ExternalLink size={14} />
-                                    </a>
-                                    <div className="mt-4 space-y-2">
-                                        <button
-                                            onClick={() => {
-                                                setStep('payment');
-                                            }}
-                                            className="w-full px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:shadow-lg transition-all"
-                                        >
-                                            Watch for Confirmation
-                                        </button>
-                                        <div className="text-xs text-muted-foreground">
-                                            Status updates will appear below as funds are detected on-chain
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {escrowCreated && txHash && !sessionStorage.getItem('walletMode') && (
+                            {escrowCreated && txHash && (
                                 <div className="bg-success/10 border border-success/20 rounded-lg p-3 animate-fade-in">
                                     <div className="flex items-center gap-2 text-success text-sm mb-2">
                                         <Check size={16} />

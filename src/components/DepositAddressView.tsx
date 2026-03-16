@@ -28,6 +28,26 @@ export const DepositAddressView: React.FC<DepositAddressViewProps> = ({
     const [copiedAddress, setCopiedAddress] = React.useState(false);
     const [copiedAmount, setCopiedAmount] = React.useState(false);
 
+    React.useEffect(() => {
+        if (!session || session.status !== 'SETTLED' || !urlParentOrigin) return;
+
+        const timeoutId = window.setTimeout(() => {
+            window.parent.postMessage(
+                {
+                    type: 'PAYMENT_SUCCESS',
+                    data: {
+                        reference: session.id,
+                        status: session.status,
+                        amount: amount,
+                    },
+                },
+                urlParentOrigin,
+            );
+        }, 4000);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [session, urlParentOrigin, amount]);
+
     const copyToClipboard = async (text: string, type: 'address' | 'amount') => {
         try {
             if (navigator.clipboard && window.isSecureContext) {
@@ -96,7 +116,7 @@ export const DepositAddressView: React.FC<DepositAddressViewProps> = ({
         );
     }
 
-    const { status, depositAddress, qrData, expectedAmountFormatted, confirmations, requiredConfirmations = 10 } = session;
+    const { status, depositAddress, qrData, expectedAmount, confirmations, requiredConfirmations = 10 } = session;
 
     // Terminal states
     if (status === 'EXPIRED') {
@@ -130,19 +150,6 @@ export const DepositAddressView: React.FC<DepositAddressViewProps> = ({
     }
 
     if (status === 'SETTLED') {
-        setTimeout(() => {
-            window.parent.postMessage(
-                {
-                    type: 'PAYMENT_SUCCESS',
-                    data: {
-                        reference: session?.id,
-                        status,
-                        amount: amount
-                    }
-                },
-                urlParentOrigin // <-- IMPORTANT
-            );
-        }, 4000)
         return (
             <div className="py-12 text-center space-y-4 animate-in zoom-in">
                 <div className="mx-auto w-16 h-16 bg-success/10 text-success rounded-full flex items-center justify-center mb-6">
@@ -175,7 +182,7 @@ export const DepositAddressView: React.FC<DepositAddressViewProps> = ({
 
                 <div className="bg-muted rounded-xl p-4 border border-border inline-block min-w-[250px]">
                     <div className="text-sm text-muted-foreground mb-1">Detected Amount</div>
-                    <div className="text-xl font-bold text-foreground">{expectedAmountFormatted} {currency}</div>
+                    <div className="text-xl font-bold text-foreground">{expectedAmount} {currency}</div>
                 </div>
             </div>
         );
@@ -206,11 +213,11 @@ export const DepositAddressView: React.FC<DepositAddressViewProps> = ({
                         <div>
                             <div className="text-xs text-muted-foreground mb-1">Exact Amount Required</div>
                             <div className="font-mono text-lg font-bold text-foreground">
-                                {expectedAmountFormatted} <span className="text-sm font-normal text-muted-foreground">{currency}</span>
+                                {expectedAmount} <span className="text-sm font-normal text-muted-foreground">{currency}</span>
                             </div>
                         </div>
                         <button
-                            onClick={() => copyToClipboard(expectedAmountFormatted, 'amount')}
+                            onClick={() => copyToClipboard(expectedAmount, 'amount')}
                             className="p-2 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground"
                             title="Copy amount"
                         >
@@ -242,7 +249,7 @@ export const DepositAddressView: React.FC<DepositAddressViewProps> = ({
                 <div className="text-xs text-warning">
                     <p className="font-medium mb-1">Important</p>
                     <ul className="list-disc leading-tight pl-4 space-y-1">
-                        <li>Send exactly <strong>{expectedAmountFormatted} {currency}</strong></li>
+                        <li>Send exactly <strong>{expectedAmount} {currency}</strong></li>
                         <li>Send only via the <strong>{session.chain}</strong> network</li>
                         <li>This address is valid for 1 transaction only</li>
                     </ul>

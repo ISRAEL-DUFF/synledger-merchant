@@ -8,7 +8,7 @@ export type DepositSessionStatus = 'PENDING' | 'DETECTED' | 'CONFIRMING' | 'CONF
 export interface DepositSession {
     id: string;
     depositAddress: string;
-    expectedAmountFormatted: string;
+    expectedAmount: string;
     chain: string;
     token: string;
     status: DepositSessionStatus;
@@ -23,14 +23,15 @@ export function useDepositSession(merchantPaymentId: string | undefined, chain: 
     const [session, setSession] = useState<DepositSession | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [socket, setSocket] = useState<Socket | null>(null);
+    const [activePaymentId, setActivePaymentId] = useState<string | null>(merchantPaymentId || null);
 
     // 1. Create or fetch session when params are ready
-    const createSession = useCallback(async (params?: { paymentId?: string }) => {
-        if (!chain || !token) return;
-        if (!params?.paymentId && !merchantPaymentId) return;
+    const createSession = useCallback(async (params?: { paymentId?: string }): Promise<DepositSession | null> => {
+        if (!chain || !token) return null;
+        if (!params?.paymentId && !merchantPaymentId) return null;
 
         let paymentId = params?.paymentId || merchantPaymentId;
+        setActivePaymentId(paymentId || null);
 
         setLoading(true);
         setError(null);
@@ -50,9 +51,11 @@ export function useDepositSession(merchantPaymentId: string | undefined, chain: 
             const newSession = await res.json();
             console.log('Session:>>>>>', newSession)
             setSession(newSession);
+            return newSession;
         } catch (err: any) {
             console.error('Failed to create deposit session:', err);
             setError(err.message);
+            return null;
         } finally {
             setLoading(false);
         }
@@ -125,8 +128,6 @@ export function useDepositSession(merchantPaymentId: string | undefined, chain: 
             setSession(prev => prev ? { ...prev, status: 'FAILED', failureReason: data.reason } : null);
         });
 
-        setSocket(newSocket);
-
         return () => {
             console.log('[WebSocket] Cleanup: disconnecting socket');
             newSocket.disconnect();
@@ -135,13 +136,13 @@ export function useDepositSession(merchantPaymentId: string | undefined, chain: 
 
     // 3. Fallback Polling (if WS fails or as a backup)
     useEffect(() => {
-        if (!session?.id || ['SETTLED', 'EXPIRED', 'FAILED'].includes(session.status)) return;
+        if (!session?.id || !activePaymentId || ['SETTLED', 'EXPIRED', 'FAILED'].includes(session.status)) return;
 
         const interval = setInterval(async () => {
             // Keep polling as a backup even if socket says connected
             // Just in case room subscription or events are not flowing
             try {
-                const pollUrl = `${API_URL}/checkout/payments/${merchantPaymentId}/deposit-session/status/${session.id}`;
+                const pollUrl = `${API_URL}/checkout/payments/${activePaymentId}/deposit-session/status/${session.id}`;
                 const res = await fetch(pollUrl);
 
                 if (res.ok) {
@@ -160,7 +161,7 @@ export function useDepositSession(merchantPaymentId: string | undefined, chain: 
         }, 5000);
 
         return () => clearInterval(interval);
-    }, [session?.id, session?.status, session?.confirmations, merchantPaymentId]);
+    }, [session?.id, session?.status, session?.confirmations, activePaymentId]);
 
     return {
         session,

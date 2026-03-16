@@ -59,9 +59,10 @@ export interface PaymentParams {
     tokenSymbol: TokenSymbol;
     amount: string;
     fromAddress: string;
-    toAddress: string; // Usually your escrow contract
+    toAddress: string;
     reference: string; // Payment intent ID
     category: string;
+    paymentMode?: 'escrow' | 'direct';
 }
 
 /**
@@ -71,7 +72,7 @@ export interface PaymentParams {
 export async function buildAndSignPayment(
     params: PaymentParams
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
-    const { chain, tokenSymbol, amount, fromAddress, toAddress, reference, category } = params;
+    const { chain, tokenSymbol, amount, fromAddress, toAddress, reference, category, paymentMode = 'escrow' } = params;
 
     try {
         console.log('💳 Building payment transaction:', {
@@ -80,13 +81,14 @@ export async function buildAndSignPayment(
             amount,
             from: fromAddress,
             to: toAddress,
+            paymentMode,
         });
 
         // Step 1: Build the appropriate transaction for this chain/token
         const tx = await buildTransactionForChain(params);
 
         // Step 2: Check if token approval is needed (for ERC20)
-        if (tokenSymbol !== 'native' as any && tokenSymbol !== 'ETH' as any) {
+        if (paymentMode === 'escrow' && tokenSymbol !== 'native' as any && tokenSymbol !== 'ETH' as any) {
             const approved = await ensureTokenApproval(params);
             if (!approved) {
                 return {
@@ -148,7 +150,7 @@ async function buildTransactionForChain(params: PaymentParams): Promise<any> {
  * Build EVM (Ethereum-compatible) transaction
  */
 async function buildEVMTransaction(params: PaymentParams): Promise<any> {
-    const { chain, tokenSymbol, amount, fromAddress, toAddress, reference, category } = params;
+    const { chain, tokenSymbol, amount, fromAddress, toAddress, reference, category, paymentMode = 'escrow' } = params;
 
     const contractByChain = getContractByName(chain);
     const escrowAddress = contractByChain.escrowManager;
@@ -177,6 +179,8 @@ async function buildEVMTransaction(params: PaymentParams): Promise<any> {
         decimals = 6; // USDT/USDC use 6 decimals
     }
 
+    console.log("contract by chain>>>>>>:", contractByChain)
+
     if (!tokenAddress) {
         throw new Error(`Token ${tokenSymbol} not found on ${chain}`);
     }
@@ -185,25 +189,50 @@ async function buildEVMTransaction(params: PaymentParams): Promise<any> {
     const amountInWei = parseUnits(amount, decimals);
     const paymentReferenceBytes = ethers.encodeBytes32String(reference);
 
-    // Encode escrow creation call
-    const data = encodeFunctionData({
-        abi: ESCROW_ABI,
-        functionName: 'createEscrow',
-        args: [tokenAddress, amountInWei, paymentReferenceBytes, category],
-    });
+    let tx: any;
+    if (paymentMode === 'direct') {
+        if (tokenSymbol === 'native' as any || tokenSymbol === 'ETH' as any) {
+            tx = {
+                from: fromAddress,
+                to: toAddress,
+                value: `0x${amountInWei.toString(16)}`,
+                data: '0x',
+            };
+        } else {
+            const data = encodeFunctionData({
+                abi: ERC20_ABI as any,
+                functionName: 'transfer',
+                args: [toAddress as `0x${string}`, amountInWei],
+            });
 
-    // Build transaction object
-    const tx: any = {
-        from: fromAddress,
-        to: escrowAddress,
-        data,
-    };
-
-    // Add value if native token
-    if (tokenSymbol === 'native' as any || tokenSymbol === 'ETH' as any) {
-        tx.value = `0x${amountInWei.toString(16)}`;
+            tx = {
+                from: fromAddress,
+                to: tokenAddress,
+                data,
+                value: '0x0',
+            };
+        }
     } else {
-        tx.value = '0x0';
+        // Encode escrow creation call
+        const data = encodeFunctionData({
+            abi: ESCROW_ABI,
+            functionName: 'createEscrow',
+            args: [tokenAddress, amountInWei, paymentReferenceBytes, category],
+        });
+
+        // Build transaction object
+        tx = {
+            from: fromAddress,
+            to: escrowAddress,
+            data,
+        };
+
+        // Add value if native token
+        if (tokenSymbol === 'native' as any || tokenSymbol === 'ETH' as any) {
+            tx.value = `0x${amountInWei.toString(16)}`;
+        } else {
+            tx.value = '0x0';
+        }
     }
 
     return tx;
@@ -213,7 +242,7 @@ async function buildEVMTransaction(params: PaymentParams): Promise<any> {
  * Build Tron transaction
  */
 async function buildTronTransaction(params: PaymentParams): Promise<any> {
-    const { tokenSymbol, amount, fromAddress, toAddress, reference, category } = params;
+    const { tokenSymbol, amount, fromAddress, toAddress, reference, category, paymentMode = 'escrow' } = params;
 
     if (!window.tronWeb || !window.tronWeb.ready) {
         throw new Error('TronLink not connected');
@@ -221,6 +250,26 @@ async function buildTronTransaction(params: PaymentParams): Promise<any> {
 
     const tronWeb = window.tronWeb;
     const contractByChain = getContractByName('tron');
+
+    if (paymentMode === 'direct') {
+        if (tokenSymbol === 'native' as any) {
+            const amountSun = tronWeb.toSun(amount);
+            const tx = await tronWeb.transactionBuilder.sendTrx(
+                toAddress,
+                amountSun,
+                fromAddress
+            );
+            const signedTx = await tronWeb.trx.sign(tx);
+            const result = await tronWeb.trx.sendRawTransaction(signedTx);
+            return result.txid;
+        }
+
+        const tokenAddress = tokenSymbol === 'USDT' ? contractByChain.usdt || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t' : contractByChain.usdc || '';
+        const decimals = 6;
+        const amountInSmallestUnit = Math.floor(parseFloat(amount) * Math.pow(10, decimals)).toString();
+        const tokenContract = await tronWeb.contract().at(tokenAddress);
+        return await tokenContract.transfer(toAddress, amountInSmallestUnit).send({ from: fromAddress });
+    }
 
     if (tokenSymbol === 'native' as any) {
         // TRX transfer
