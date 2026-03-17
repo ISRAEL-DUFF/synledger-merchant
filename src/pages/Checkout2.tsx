@@ -1140,6 +1140,7 @@ const Checkout = () => {
                                             urlParentOrigin={urlParentOrigin}
                                             onRetry={handleCreateSession}
                                             onGoBack={() => setStep('initial')}
+                                            fromWalletMode={!!txHash}
                                         />
                                     )}
                                 </div>

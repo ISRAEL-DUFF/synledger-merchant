@@ -13,6 +13,7 @@ interface DepositAddressViewProps {
     urlParentOrigin?: string;
     onRetry?: () => void;
     onGoBack?: () => void;
+    fromWalletMode?: boolean;
 }
 
 export const DepositAddressView: React.FC<DepositAddressViewProps> = ({
@@ -23,7 +24,8 @@ export const DepositAddressView: React.FC<DepositAddressViewProps> = ({
     amount,
     urlParentOrigin,
     onRetry,
-    onGoBack
+    onGoBack,
+    fromWalletMode = false,
 }) => {
     const [copiedAddress, setCopiedAddress] = React.useState(false);
     const [copiedAmount, setCopiedAmount] = React.useState(false);
@@ -188,7 +190,25 @@ export const DepositAddressView: React.FC<DepositAddressViewProps> = ({
         );
     }
 
-    // PENDING state
+    // PENDING state — if user already sent via connected wallet, skip QR and show waiting screen
+    if (fromWalletMode) {
+        return (
+            <div className="py-8 text-center space-y-6">
+                <div className="mx-auto w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-2 animate-pulse">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                </div>
+                <div>
+                    <h3 className="text-xl font-bold text-foreground mb-2">Transfer Sent!</h3>
+                    <p className="text-muted-foreground">Waiting for your transaction to be detected on the blockchain. This may take a moment...</p>
+                </div>
+                <div className="bg-muted rounded-xl p-4 border border-border inline-block min-w-[250px]">
+                    <div className="text-sm text-muted-foreground mb-1">Amount Sent</div>
+                    <div className="text-xl font-bold text-foreground">{amount} {currency}</div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
             {onGoBack && (
