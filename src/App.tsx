@@ -1,10 +1,10 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { WagmiProvider } from "wagmi";
-import { config } from "@/lib/wagmi-config";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { wagmiAdapter, queryClient } from "./lib/web3modal-config";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import Login from "./pages/Login";
@@ -14,10 +14,9 @@ import Settlements from "./pages/Settlements";
 import Settings from "./pages/Settings";
 import PaymentLinks from "./pages/PaymentLinks";
 import Checkout from "./pages/Checkout";
+import Checkout2 from "./pages/Checkout2";
 import DashboardLayout from "./layouts/DashboardLayout";
 import NotFound from "./pages/NotFound";
-
-const queryClient = new QueryClient();
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
@@ -26,7 +25,7 @@ function AppRoutes() {
     <Routes>
       {/* Public routes */}
       <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
-      <Route path="/checkout" element={<Checkout />} />
+      <Route path="/checkout" element={<Checkout2 />} />
 
       {/* Protected routes - Dashboard */}
       <Route element={<DashboardLayout />}>
@@ -50,7 +49,7 @@ function ThemeInitializer({ children }: { children: React.ReactNode }) {
 }
 
 const App = () => (
-  <WagmiProvider config={config}>
+  <WagmiProvider config={wagmiAdapter.wagmiConfig}>
     <QueryClientProvider client={queryClient}>
       <ThemeInitializer>
         <TooltipProvider>

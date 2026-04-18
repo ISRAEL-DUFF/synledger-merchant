@@ -62,15 +62,15 @@ export function PaymentTable({ payments, showViewAll, onViewAll }: PaymentTableP
           </thead>
           <tbody className="divide-y divide-border">
             {payments.map((payment, index) => (
-              <tr 
-                key={payment.id} 
+              <tr
+                key={payment.id}
                 className="transition-colors hover:bg-muted/20 animate-fade-in"
                 style={{ animationDelay: `${index * 50}ms` }}
               >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm font-medium">{payment.reference}</span>
-                    <button 
+                    <button
                       onClick={() => copyToClipboard(payment.reference, 'Reference')}
                       className="text-muted-foreground hover:text-foreground transition-colors"
                     >
@@ -82,7 +82,9 @@ export function PaymentTable({ payments, showViewAll, onViewAll }: PaymentTableP
                   <div className="flex flex-col">
                     <span className="font-semibold">{formatCurrency(payment.amount)}</span>
                     {payment.cryptoAmount && (
-                      <span className="text-xs text-muted-foreground">{payment.cryptoAmount} USDT</span>
+                      <span className="text-xs text-muted-foreground">
+                        {payment.cryptoAmount} {payment.token || 'USDT'}
+                      </span>
                     )}
                   </div>
                 </td>
@@ -108,7 +110,7 @@ export function PaymentTable({ payments, showViewAll, onViewAll }: PaymentTableP
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                   {payment.txHash ? (
-                    <a 
+                    <a
                       href={`https://tronscan.org/#/transaction/${payment.txHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -126,7 +128,7 @@ export function PaymentTable({ payments, showViewAll, onViewAll }: PaymentTableP
           </tbody>
         </table>
       </div>
-      
+
       {showViewAll && onViewAll && (
         <div className="border-t border-border p-4 text-center">
           <Button variant="ghost" onClick={onViewAll} className="text-primary hover:text-primary/80">

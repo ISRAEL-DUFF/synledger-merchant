@@ -183,8 +183,11 @@ export function useEscrow() {
      * Approve token spending
      */
     const approveToken = async (tokenAddress: string, amount: string) => {
+        if (typeof window === 'undefined' || !window.ethereum) {
+            throw new Error('Wallet not connected');
+        }
         const escrow = await writeContractFunc();
-        const provider = new ethers.BrowserProvider(window.ethereum);
+        const provider = new ethers.BrowserProvider(window.ethereum as any);
         const signer = await provider.getSigner();
         const token = new ethers.Contract(tokenAddress, ABIS.erc20, signer);
 
