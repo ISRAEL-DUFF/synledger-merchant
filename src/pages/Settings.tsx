@@ -13,8 +13,10 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, Globe, Bell, Key, Copy, Eye, EyeOff, RefreshCw, Save, ExternalLink, Loader2, AlertCircle, Trash2, Plus } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Building2, Globe, Bell, Key, Copy, Eye, EyeOff, RefreshCw, Save, ExternalLink, Loader2, AlertCircle, Trash2, Plus, Search, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { api } from '@/lib/api';
 import { useMerchantProfile, useUpdateProfile, useUpdateBankAccount, useApiKeys, useRegenerateApiKeys, useUpdateSettlementPreferences, useSettlementAddresses, useUpsertSettlementAddress, useDeleteSettlementAddress } from '@/hooks/useMerchant';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { SettlementType, SettlementFrequency } from '@/types/merchant';
@@ -46,6 +48,13 @@ export default function Settings() {
     bankName: '',
   });
 
+  const [banks, setBanks] = useState<{ id: number; code: string; name: string }[]>([]);
+  const [banksLoading, setBanksLoading] = useState(false);
+  const [bankSearch, setBankSearch] = useState('');
+  const [showBankModal, setShowBankModal] = useState(false);
+  const [isResolvingAccount, setIsResolvingAccount] = useState(false);
+  const [resolvedAccountName, setResolvedAccountName] = useState('');
+
   const [settlementType, setSettlementType] = useState<SettlementType>('FIAT');
   const [settlementFrequency, setSettlementFrequency] = useState<SettlementFrequency>('EOD');
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -67,6 +76,9 @@ export default function Settings() {
           bankCode: profile.bankAccount.bankCode || '058',
           bankName: profile.bankAccount.bankName || '',
         });
+        if (profile.bankAccount.accountName) {
+          setResolvedAccountName(profile.bankAccount.accountName);
+        }
       }
       if (profile.settings) {
         setSettlementType(profile.settings.settlementType || 'FIAT');
@@ -75,6 +87,47 @@ export default function Settings() {
       setWebhookUrl(profile.webhookUrl || '');
     }
   }, [profile]);
+
+  // Load banks on mount
+  useEffect(() => {
+    let mounted = true;
+    setBanksLoading(true);
+    api.get<{ success: boolean; banks: { id: number; code: string; name: string }[] }>('/payments/banks')
+      .then((res) => {
+        if (mounted && res.success) setBanks([...res.banks].sort((a, b) => a.name.localeCompare(b.name)));
+      })
+      .catch(() => {})
+      .finally(() => { if (mounted) setBanksLoading(false); });
+    return () => { mounted = false; };
+  }, []);
+
+  // Auto-resolve account when bankCode + 10-digit accountNumber
+  useEffect(() => {
+    if (!bankForm.bankCode || bankForm.accountNumber.length !== 10) {
+      setResolvedAccountName('');
+      return;
+    }
+    setIsResolvingAccount(true);
+    setResolvedAccountName('');
+    let active = true;
+    api.post<{ success: boolean; accountName: string }>('/payments/resolve-account', {
+      accountNumber: bankForm.accountNumber,
+      accountBank: bankForm.bankCode,
+    })
+      .then((res) => {
+        if (active && res.success) {
+          setResolvedAccountName(res.accountName);
+          setBankForm(prev => ({ ...prev, accountName: res.accountName }));
+        }
+      })
+      .catch(() => { if (active) setResolvedAccountName(''); })
+      .finally(() => { if (active) setIsResolvingAccount(false); });
+    return () => { active = false; };
+  }, [bankForm.bankCode, bankForm.accountNumber]);
+
+  const filteredBanks = banks.filter(b =>
+    b.name.toLowerCase().includes(bankSearch.toLowerCase())
+  );
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -191,54 +244,103 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Bank Selector */}
                 <div className="space-y-2">
-                  <Label htmlFor="bankName">Bank Name</Label>
-                  <Select
-                    value={bankForm.bankCode}
-                    onValueChange={(v) => setBankForm({ ...bankForm, bankCode: v, bankName: v === '058' ? 'GTBank' : 'Other Bank' })}
+                  <Label>Bank Name</Label>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between bg-muted/50"
+                    onClick={() => setShowBankModal(true)}
                   >
-                    <SelectTrigger className="bg-muted/50">
-                      <SelectValue placeholder="Select bank" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="058">GTBank</SelectItem>
-                      <SelectItem value="044">Access Bank</SelectItem>
-                      <SelectItem value="011">First Bank</SelectItem>
-                      <SelectItem value="033">UBA</SelectItem>
-                      <SelectItem value="057">Zenith Bank</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    {bankForm.bankName || 'Select bank...'}
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
                 </div>
+
+                {/* Account Number */}
                 <div className="space-y-2">
                   <Label htmlFor="accountNumber">Account Number</Label>
                   <Input
                     id="accountNumber"
-                    placeholder="0123456789"
+                    placeholder="Enter 10-digit account number"
                     value={bankForm.accountNumber}
-                    onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
+                    onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    maxLength={10}
+                    inputMode="numeric"
                     className="bg-muted/50"
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="accountName">Account Name</Label>
-                  <Input
-                    id="accountName"
-                    placeholder="Business Name Ltd"
-                    value={bankForm.accountName}
-                    onChange={(e) => setBankForm({ ...bankForm, accountName: e.target.value })}
-                    className="bg-muted/50"
-                  />
+                  {isResolvingAccount && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Verifying account...
+                    </div>
+                  )}
+                  {resolvedAccountName && (
+                    <div className="flex items-center gap-2 text-xs text-green-500">
+                      <Check className="h-3 w-3" /> {resolvedAccountName}
+                    </div>
+                  )}
+                  {bankForm.accountNumber.length === 10 && !isResolvingAccount && !resolvedAccountName && bankForm.bankCode && (
+                    <div className="flex items-center gap-2 text-xs text-destructive">
+                      <AlertCircle className="h-3 w-3" /> Could not verify account
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="pt-4 border-t border-border">
-                <Button onClick={handleUpdateBank} className="gradient-primary" disabled={updateBankAccount.isPending}>
+                <Button
+                  onClick={handleUpdateBank}
+                  className="gradient-primary"
+                  disabled={updateBankAccount.isPending || !resolvedAccountName}
+                >
                   {updateBankAccount.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                   Update Bank Account
                 </Button>
               </div>
             </CardContent>
           </Card>
+
+          {/* Bank Search Modal */}
+          <Dialog open={showBankModal} onOpenChange={setShowBankModal}>
+            <DialogContent className="max-h-[80vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle>Select Bank</DialogTitle>
+              </DialogHeader>
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search banks..."
+                  value={bankSearch}
+                  onChange={(e) => setBankSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex-1 overflow-y-auto max-h-[50vh] space-y-1">
+                {banksLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : filteredBanks.length === 0 ? (
+                  <p className="text-center text-sm text-muted-foreground py-8">No banks found</p>
+                ) : (
+                  filteredBanks.map((bank) => (
+                    <button
+                      key={bank.code}
+                      className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-secondary transition-colors flex items-center justify-between"
+                      onClick={() => {
+                        setBankForm(prev => ({ ...prev, bankCode: bank.code, bankName: bank.name }));
+                        setShowBankModal(false);
+                        setBankSearch('');
+                      }}
+                    >
+                      <span className="text-sm">{bank.name}</span>
+                      {bankForm.bankCode === bank.code && <Check className="h-4 w-4 text-primary" />}
+                    </button>
+                  ))
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* API Keys */}
