@@ -20,7 +20,8 @@ import {
   Zap,
   Menu,
   ArrowRightLeft,
-  Bell
+  Bell,
+  Wallet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -31,6 +32,7 @@ import { Link } from 'lucide-react';
 
 const navItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
+  { title: 'Wallet', url: '/wallet', icon: Wallet },
   { title: 'Payments', url: '/payments', icon: CreditCard },
   { title: 'Payment Links', url: '/payment-links', icon: Link },
   { title: 'Settlements', url: '/settlements', icon: ArrowRightLeft },

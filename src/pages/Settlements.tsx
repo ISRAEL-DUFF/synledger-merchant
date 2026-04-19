@@ -1,4 +1,4 @@
-import { useMerchantSettlements } from '@/hooks/useMerchant';
+import { useMerchantSettlements, useMerchantProfile } from '@/hooks/useMerchant';
 import { StatusBadge } from '@/components/StatusBadge';
 import { formatDistanceToNow } from 'date-fns';
 import { ExternalLink, Copy, ArrowDownToLine, Loader2, AlertCircle } from 'lucide-react';
@@ -16,7 +16,8 @@ function formatCurrency(amount: number): string {
 }
 
 export default function Settlements() {
-  const { data: settlements, isLoading, error } = useMerchantSettlements();
+  const { data: settlementsData, isLoading, error } = useMerchantSettlements();
+  const { data: profile } = useMerchantProfile();
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -40,7 +41,7 @@ export default function Settlements() {
     );
   }
 
-  if (error || !settlements) {
+  if (error || !settlementsData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
         <AlertCircle className="w-12 h-12 text-destructive mb-4" />
@@ -49,6 +50,9 @@ export default function Settlements() {
       </div>
     );
   }
+
+  const settlements = settlementsData.settlements || [];
+  const feeBps = profile?.feeBps ?? 150;
 
   const totalSettled = settlements
     .filter(s => s.status === 'completed')
@@ -79,9 +83,9 @@ export default function Settlements() {
           <p className="text-2xl font-bold text-warning">{formatCurrency(pendingAmount)}</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-6">
-          <p className="text-sm text-muted-foreground mb-2">Platform Fees (1.5%)</p>
+          <p className="text-sm text-muted-foreground mb-2">Platform Fees ({(feeBps / 100).toFixed(2)}%)</p>
           <p className="text-2xl font-bold text-muted-foreground">
-            {formatCurrency(Math.round((totalSettled + pendingAmount) * 0.015))}
+            {formatCurrency(Math.round((totalSettled + pendingAmount) * feeBps / 10000))}
           </p>
         </div>
       </div>
@@ -96,10 +100,16 @@ export default function Settlements() {
                   Settlement ID
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Type
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Amount
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Status
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Destination
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Payments
@@ -128,7 +138,16 @@ export default function Settlements() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="font-semibold">{formatCurrency(settlement.amount)}</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                      settlement.type === 'CRYPTO'
+                        ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                        : 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                    }`}>
+                      {settlement.type === 'CRYPTO' ? `Crypto${settlement.chain ? ` · ${settlement.chain}` : ''}` : `Fiat · ${settlement.currency || 'NGN'}`}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="font-semibold">{formatCurrency(Number(settlement.amount))}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${settlement.status === 'completed'
@@ -139,6 +158,13 @@ export default function Settlements() {
                         }`} />
                       {settlement.status === 'completed' ? 'Completed' : 'Pending'}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {settlement.destination ? (
+                      <span className="font-mono text-sm">{settlement.destination.slice(0, 10)}...{settlement.destination.slice(-4)}</span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="text-sm text-muted-foreground">

@@ -8,9 +8,12 @@ export interface BankAccount {
   bankName: string;
 }
 
+export type SettlementType = 'CRYPTO' | 'FIAT';
+export type SettlementFrequency = 'INSTANT' | 'SIX_HOURLY' | 'TWELVE_HOURLY' | 'EOD';
+
 export interface MerchantSettings {
-  autoSettle: boolean;
-  settlementSchedule: 'instant' | 'daily' | 'weekly';
+  settlementType: SettlementType;
+  settlementFrequency: SettlementFrequency;
   supportedChains: ChainType[];
   defaultChain: ChainType;
 }
@@ -26,6 +29,7 @@ export interface Merchant {
   bankAccount?: BankAccount;
   webhookUrl?: string;
   settings?: MerchantSettings;
+  feeBps?: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -48,6 +52,8 @@ export interface MerchantPayment {
   token?: string;
   cryptoAmount?: string;
   txHash?: string;
+  payoutStatus?: string;
+  payoutTxHash?: string;
   paidAt?: string;
   settledAt?: string;
   createdAt: string;
@@ -58,14 +64,53 @@ export type SettlementStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
 export interface MerchantSettlement {
   id: string;
-  amount: number;
+  type: SettlementType;
+  amount: number | string;
+  currency: string;
+  chain?: string;
   paymentsCount: number;
   paymentIds: string[];
+  sessionIds?: string[];
   status: SettlementStatus;
   transferReference?: string;
+  destination?: string;
+  failureReason?: string;
   settledAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MerchantSettlementAddress {
+  id: string;
+  chain: string;
+  address: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface MerchantBalance {
+  chain: string;
+  tokenSymbol: string;
+  tokenAddress: string;
+  receivable: string;
+}
+
+export interface WithdrawRequest {
+  chain: ChainType;
+  tokenSymbol: string;
+  tokenAddress?: string;
+  amount: string;
+  toAddress: string;
+}
+
+export interface WithdrawResponse {
+  success: boolean;
+  txHash: string;
+  chain: string;
+  tokenSymbol: string;
+  amount: string;
+  toAddress: string;
+  status: string;
 }
 
 export interface MerchantWebhookLog {
