@@ -8,7 +8,7 @@ import { getUSDTAddressTron } from "./contracts";
 // Environment toggle - switch this to 'mainnet' for production
 export const NETWORK_ENV: 'testnet' | 'mainnet' = 'testnet';
 
-export type SupportedChain = 'ethereum' | 'base' | 'arbitrum' | 'tron' | 'solana';
+export type SupportedChain = 'ethereum' | 'base' | 'arbitrum' | 'bsc' | 'tron' | 'solana';
 export type TokenSymbol = 'USDT' | 'USDC';
 
 interface TokenConfig {
@@ -165,6 +165,46 @@ export const CHAIN_CONFIGS: Record<SupportedChain, ChainConfig> = {
       },
     ],
     fee: 'Low (~$0.10)',
+    isEVM: true,
+    enabled: true,
+  },
+  bsc: {
+    id: 'bsc',
+    name: 'BSC',
+    displayName: 'BNB Smart Chain',
+    icon: '🟡',
+    chainId: {
+      mainnet: 56,
+      testnet: 97, // BSC Testnet
+    },
+    rpcUrl: {
+      mainnet: 'https://bsc-dataseed.binance.org',
+      testnet: 'https://data-seed-prebsc-1-s1.binance.org:8545',
+    },
+    blockExplorer: {
+      mainnet: 'https://bscscan.com',
+      testnet: 'https://testnet.bscscan.com',
+    },
+    nativeCurrency: {
+      name: 'BNB',
+      symbol: 'BNB',
+      decimals: 18,
+    },
+    tokens: [
+      {
+        symbol: 'USDT',
+        decimals: 18,
+        mainnet: '0x55d398326f99059fF775485246999027B3197955',
+        testnet: '0x0000000000000000000000000000000000000000',
+      },
+      {
+        symbol: 'USDC',
+        decimals: 18,
+        mainnet: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+        testnet: '0x0000000000000000000000000000000000000000',
+      },
+    ],
+    fee: 'Low (~$0.05)',
     isEVM: true,
     enabled: true,
   },
@@ -347,6 +387,7 @@ export function getWalletsForChain(chain: SupportedChain): WalletConfig[] {
     case 'ethereum':
     case 'base':
     case 'arbitrum':
+    case 'bsc':
       return evmWallets;
     case 'tron':
       return [
@@ -367,6 +408,7 @@ export const MERCHANT_ADDRESSES: Record<SupportedChain, string> = {
   ethereum: '0x742d35Cc6634C0532925a3b844Bc9e7595f1e123',
   base: '0x742d35Cc6634C0532925a3b844Bc9e7595f1e123',
   arbitrum: '0x742d35Cc6634C0532925a3b844Bc9e7595f1e123',
+  bsc: '0x742d35Cc6634C0532925a3b844Bc9e7595f1e123',
   tron: 'TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9',
   solana: 'CQy8Jf9gqKjNNXcxjLCHMQgcCfHc7Dpmjz8PRxjK9s1d',
 };

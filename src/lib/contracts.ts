@@ -48,7 +48,7 @@ export function getUSDCAddressTron(): string {
 }
 
 
-export function getContractByName(name: 'ethereum' | 'arbitrum' | 'base' | 'tron' | 'solana') {
+export function getContractByName(name: 'ethereum' | 'arbitrum' | 'base' | 'bsc' | 'tron' | 'solana') {
     const chainConfig = getChainConfigSync(name);
 
     if (!chainConfig) {

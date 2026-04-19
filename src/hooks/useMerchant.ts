@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Merchant, MerchantPayment, PaymentLink } from '@/types/merchant';
+import { Merchant, MerchantPayment, MerchantSettlement, MerchantSettlementAddress, MerchantBalance, WithdrawRequest, WithdrawResponse, PaymentLink, SettlementFrequency, SettlementType } from '@/types/merchant';
 import { toast } from 'sonner';
 
 // Types
@@ -22,6 +22,11 @@ interface ApiKeysResponse {
     secretKey: string;
 }
 
+interface SettlementsResponse {
+    settlements: MerchantSettlement[];
+    total: number;
+}
+
 // Keys
 export const merchantKeys = {
     all: ['merchant'] as const,
@@ -31,6 +36,8 @@ export const merchantKeys = {
     settlements: () => [...merchantKeys.all, 'settlements'] as const,
     paymentLinks: () => [...merchantKeys.all, 'payment-links'] as const,
     apiKeys: () => [...merchantKeys.all, 'api-keys'] as const,
+    settlementAddresses: () => [...merchantKeys.all, 'settlement-addresses'] as const,
+    balances: () => [...merchantKeys.all, 'balances'] as const,
 };
 
 // Profile Hooks
@@ -96,7 +103,7 @@ export function useMerchantAnalytics() {
 export function useMerchantSettlements() {
     return useQuery({
         queryKey: merchantKeys.settlements(),
-        queryFn: () => api.get<any[]>('/api/merchant/settlements'),
+        queryFn: () => api.get<SettlementsResponse>('/api/merchant/settlements'),
     });
 }
 
@@ -150,7 +157,83 @@ export function useRegenerateApiKeys() {
         },
         onError: () => toast.error('Failed to regenerate API keys'),
     });
-}// Exchange Rate
+}
+
+// Settlement Preferences
+export function useUpdateSettlementPreferences() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (data: { settlementType?: SettlementType; settlementFrequency?: SettlementFrequency }) =>
+            api.put<Merchant>('/api/merchant/settlement-preferences', data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: merchantKeys.profile() });
+            toast.success('Settlement preferences updated');
+        },
+        onError: () => toast.error('Failed to update settlement preferences'),
+    });
+}
+
+// Settlement Addresses
+export function useSettlementAddresses() {
+    return useQuery({
+        queryKey: merchantKeys.settlementAddresses(),
+        queryFn: () => api.get<MerchantSettlementAddress[]>('/api/merchant/settlement-addresses'),
+    });
+}
+
+export function useUpsertSettlementAddress() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (data: { chain: string; address: string }) =>
+            api.post<MerchantSettlementAddress>('/api/merchant/settlement-addresses', data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: merchantKeys.settlementAddresses() });
+            toast.success('Settlement address saved');
+        },
+        onError: () => toast.error('Failed to save settlement address'),
+    });
+}
+
+export function useDeleteSettlementAddress() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => api.delete(`/api/merchant/settlement-addresses/${id}`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: merchantKeys.settlementAddresses() });
+            toast.success('Settlement address removed');
+        },
+        onError: () => toast.error('Failed to remove settlement address'),
+    });
+}
+
+// Wallet Balances
+interface BalancesResponse {
+    balances: MerchantBalance[];
+}
+
+export function useMerchantBalances() {
+    return useQuery({
+        queryKey: merchantKeys.balances(),
+        queryFn: () => api.get<BalancesResponse>('/api/merchant/balances'),
+        refetchInterval: 30000, // Refresh every 30 seconds
+    });
+}
+
+export function useWithdraw() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (data: WithdrawRequest) => api.post<WithdrawResponse>('/api/merchant/withdraw', data),
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: merchantKeys.balances() });
+            toast.success(`Withdrawal submitted — tx: ${data.txHash?.slice(0, 12)}...`);
+        },
+        onError: (error: any) => {
+            toast.error(error?.response?.data?.message || 'Withdrawal failed');
+        },
+    });
+}
+
+// Exchange Rate
 interface ExchangeRateResponse {
     token: string;
     currency: string;

@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { ethers } from 'ethers';
 import { useContract } from './useContract';
 import { CONTRACTS, ABIS, getContractByName } from '../lib/contracts';
+import { getTokenDecimals } from '../lib/chains-config';
+import type { SupportedChain, TokenSymbol } from '../lib/chains-config';
 
 declare global {
     interface Window {
@@ -27,7 +29,8 @@ export function useEscrow() {
         amount: string, // In token decimals (e.g., "35.21" for USDT)
         paymentId: string, // From backend
         category: string,
-        chain: 'ethereum' | 'arbitrum' | 'base' | 'tron' | 'solana' = 'base' // Default to base
+        chain: SupportedChain = 'base',
+        tokenSymbol: TokenSymbol = 'USDT'
     ) => {
         setLoading(true);
         setError(null);
@@ -44,9 +47,10 @@ export function useEscrow() {
                 const tronContractConfig = getContractByName('tron');
                 const escrowAddress = tronContractConfig.escrowManager;
 
-                // 1. Convert amount (USDT/USDC on Tron use 6 decimals usually)
+                // 1. Convert amount (use chain-aware decimals)
                 // Note: TronWeb handles big numbers, but we pass integer string
-                const amountMul = parseFloat(amount) * 1_000_000;
+                const tronDecimals = getTokenDecimals('tron', tokenSymbol);
+                const amountMul = parseFloat(amount) * (10 ** tronDecimals);
                 const amountInt = Math.floor(amountMul).toString();
 
                 // 2. Approve Token
@@ -133,9 +137,8 @@ export function useEscrow() {
             const escrow = await writeContractFunc();
             if (!escrow) throw new Error('Wallet not connected');
 
-            // Convert amount to wei (18 decimals for USDT/USDC)
-            // Wait, USDT/USDC usually have 6 decimals on EVM too
-            const amountWei = ethers.parseUnits(amount, 6);
+            // Convert amount to wei using chain-aware decimals
+            const amountWei = ethers.parseUnits(amount, getTokenDecimals(chain, tokenSymbol));
 
             // Convert paymentId to bytes32
             const paymentIdBytes = ethers.encodeBytes32String(paymentId);
@@ -208,7 +211,7 @@ export function useEscrow() {
     /**
      * Get escrow details
      */
-    const getEscrow = async (escrowId: string) => {
+    const getEscrow = async (escrowId: string, chain: SupportedChain = 'base', tokenSymbol: TokenSymbol = 'USDT') => {
         const escrow = await writeContractFunc();
         if (!escrow) throw new Error('Contract not initialized');
 
@@ -218,7 +221,7 @@ export function useEscrow() {
             return {
                 user: escrowData.user,
                 token: escrowData.token,
-                amount: ethers.formatUnits(escrowData.amount, 6), // USDT/USDC = 6 decimals
+                amount: ethers.formatUnits(escrowData.amount, getTokenDecimals(chain, tokenSymbol)),
                 createdAt: new Date(Number(escrowData.createdAt) * 1000),
                 timeoutAt: new Date(Number(escrowData.timeoutAt) * 1000),
                 paymentId: escrowData.paymentId,

@@ -3,7 +3,7 @@
 // Copied and adapted from frontend-v2.1
 
 import { parseUnits, encodeFunctionData, Hash } from 'viem';
-import { SupportedChain, TokenSymbol, getCurrentChainId } from '@/lib/chains-config';
+import { SupportedChain, TokenSymbol, getCurrentChainId, getTokenDecimals } from '@/lib/chains-config';
 import { getContractByName, ABIS } from '@/lib/contracts';
 import { ethers } from 'ethers';
 import { getWalletClient, getPublicClient } from '@wagmi/core';
@@ -176,7 +176,7 @@ async function buildEVMTransaction(params: PaymentParams): Promise<any> {
     } else {
         // ERC20 token
         tokenAddress = tokenSymbol === 'USDT' ? contractByChain.usdt : contractByChain.usdc;
-        decimals = 6; // USDT/USDC use 6 decimals
+        decimals = getTokenDecimals(chain, tokenSymbol);
     }
 
     console.log("contract by chain>>>>>>:", contractByChain)
@@ -265,7 +265,7 @@ async function buildTronTransaction(params: PaymentParams): Promise<any> {
         }
 
         const tokenAddress = tokenSymbol === 'USDT' ? contractByChain.usdt || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t' : contractByChain.usdc || '';
-        const decimals = 6;
+        const decimals = getTokenDecimals('tron', tokenSymbol);
         const amountInSmallestUnit = Math.floor(parseFloat(amount) * Math.pow(10, decimals)).toString();
         const tokenContract = await tronWeb.contract().at(tokenAddress);
         return await tokenContract.transfer(toAddress, amountInSmallestUnit).send({ from: fromAddress });
@@ -288,7 +288,7 @@ async function buildTronTransaction(params: PaymentParams): Promise<any> {
     } else {
         // TRC20 token (USDT)
         const tokenAddress = tokenSymbol === 'USDT' ? contractByChain.usdt || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t' : contractByChain.usdc || '';
-        const decimals = 6;
+        const decimals = getTokenDecimals('tron', tokenSymbol);
         const amountInSmallestUnit = Math.floor(parseFloat(amount) * Math.pow(10, decimals)).toString();
 
         const contract = await tronWeb.contract().at(contractByChain.escrowManager);
@@ -324,7 +324,7 @@ async function ensureTokenApproval(params: PaymentParams): Promise<boolean> {
     const contractByChain = getContractByName(chain);
     const escrowAddress = contractByChain.escrowManager;
     const tokenAddress = tokenSymbol === 'USDT' ? contractByChain.usdt : contractByChain.usdc;
-    const decimals = 6;
+    const decimals = getTokenDecimals(chain, tokenSymbol);
     const amountInWei = parseUnits(amount, decimals);
 
     console.log('🔍 Checking token approval...', {
@@ -358,7 +358,8 @@ async function ensureTokenApproval(params: PaymentParams): Promise<boolean> {
             escrowAddress,
             amount,
             fromAddress,
-            chain
+            chain,
+            tokenSymbol
         );
 
         if (!approved) {
@@ -426,7 +427,8 @@ async function approveToken(
     spenderAddress: string,
     amount: string,
     fromAddress: string,
-    chain: SupportedChain
+    chain: SupportedChain,
+    tokenSymbol: TokenSymbol = 'USDT'
 ): Promise<string | null> {
     const ethereum = await getEthereumProvider();
 
@@ -440,7 +442,7 @@ async function approveToken(
         //     throw new Error(`Wrong network: Wallet is on chain ${currentChainId}, but ${chain} (chain ${expectedChainId}) is required.`);
         // }
 
-        const decimals = 6;
+        const decimals = getTokenDecimals(chain, tokenSymbol);
         const amountInWei = parseUnits(amount, decimals);
 
         const data = encodeFunctionData({
@@ -593,7 +595,7 @@ export function getTokenInfo(
 
     return {
         address,
-        decimals: 6,
+        decimals: getTokenDecimals(chain, tokenSymbol as TokenSymbol),
     };
 }
 

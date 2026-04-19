@@ -13,10 +13,13 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, Globe, Bell, Key, Copy, Eye, EyeOff, RefreshCw, Save, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Building2, Globe, Bell, Key, Copy, Eye, EyeOff, RefreshCw, Save, ExternalLink, Loader2, AlertCircle, Trash2, Plus, Search, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { useMerchantProfile, useUpdateProfile, useUpdateBankAccount, useApiKeys, useRegenerateApiKeys } from '@/hooks/useMerchant';
+import { api } from '@/lib/api';
+import { useMerchantProfile, useUpdateProfile, useUpdateBankAccount, useApiKeys, useRegenerateApiKeys, useUpdateSettlementPreferences, useSettlementAddresses, useUpsertSettlementAddress, useDeleteSettlementAddress } from '@/hooks/useMerchant';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { SettlementType, SettlementFrequency } from '@/types/merchant';
 
 export default function Settings() {
   const { data: profile, isLoading: isProfileLoading } = useMerchantProfile();
@@ -24,6 +27,10 @@ export default function Settings() {
   const updateProfile = useUpdateProfile();
   const updateBankAccount = useUpdateBankAccount();
   const regenerateKeys = useRegenerateApiKeys();
+  const updateSettlementPrefs = useUpdateSettlementPreferences();
+  const { data: settlementAddresses } = useSettlementAddresses();
+  const upsertAddress = useUpsertSettlementAddress();
+  const deleteAddress = useDeleteSettlementAddress();
 
   const [showSecretKey, setShowSecretKey] = useState(false);
 
@@ -41,6 +48,19 @@ export default function Settings() {
     bankName: '',
   });
 
+  const [banks, setBanks] = useState<{ id: number; code: string; name: string }[]>([]);
+  const [banksLoading, setBanksLoading] = useState(false);
+  const [bankSearch, setBankSearch] = useState('');
+  const [showBankModal, setShowBankModal] = useState(false);
+  const [isResolvingAccount, setIsResolvingAccount] = useState(false);
+  const [resolvedAccountName, setResolvedAccountName] = useState('');
+
+  const [settlementType, setSettlementType] = useState<SettlementType>('FIAT');
+  const [settlementFrequency, setSettlementFrequency] = useState<SettlementFrequency>('EOD');
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [newAddressChain, setNewAddressChain] = useState('');
+  const [newAddressValue, setNewAddressValue] = useState('');
+
   // Sync state when data loads
   useEffect(() => {
     if (profile) {
@@ -56,9 +76,58 @@ export default function Settings() {
           bankCode: profile.bankAccount.bankCode || '058',
           bankName: profile.bankAccount.bankName || '',
         });
+        if (profile.bankAccount.accountName) {
+          setResolvedAccountName(profile.bankAccount.accountName);
+        }
       }
+      if (profile.settings) {
+        setSettlementType(profile.settings.settlementType || 'FIAT');
+        setSettlementFrequency(profile.settings.settlementFrequency || 'EOD');
+      }
+      setWebhookUrl(profile.webhookUrl || '');
     }
   }, [profile]);
+
+  // Load banks on mount
+  useEffect(() => {
+    let mounted = true;
+    setBanksLoading(true);
+    api.get<{ success: boolean; banks: { id: number; code: string; name: string }[] }>('/payments/banks')
+      .then((res) => {
+        if (mounted && res.success) setBanks([...res.banks].sort((a, b) => a.name.localeCompare(b.name)));
+      })
+      .catch(() => {})
+      .finally(() => { if (mounted) setBanksLoading(false); });
+    return () => { mounted = false; };
+  }, []);
+
+  // Auto-resolve account when bankCode + 10-digit accountNumber
+  useEffect(() => {
+    if (!bankForm.bankCode || bankForm.accountNumber.length !== 10) {
+      setResolvedAccountName('');
+      return;
+    }
+    setIsResolvingAccount(true);
+    setResolvedAccountName('');
+    let active = true;
+    api.post<{ success: boolean; accountName: string }>('/payments/resolve-account', {
+      accountNumber: bankForm.accountNumber,
+      accountBank: bankForm.bankCode,
+    })
+      .then((res) => {
+        if (active && res.success) {
+          setResolvedAccountName(res.accountName);
+          setBankForm(prev => ({ ...prev, accountName: res.accountName }));
+        }
+      })
+      .catch(() => { if (active) setResolvedAccountName(''); })
+      .finally(() => { if (active) setIsResolvingAccount(false); });
+    return () => { active = false; };
+  }, [bankForm.bankCode, bankForm.accountNumber]);
+
+  const filteredBanks = banks.filter(b =>
+    b.name.toLowerCase().includes(bankSearch.toLowerCase())
+  );
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -175,54 +244,103 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Bank Selector */}
                 <div className="space-y-2">
-                  <Label htmlFor="bankName">Bank Name</Label>
-                  <Select
-                    value={bankForm.bankCode}
-                    onValueChange={(v) => setBankForm({ ...bankForm, bankCode: v, bankName: v === '058' ? 'GTBank' : 'Other Bank' })}
+                  <Label>Bank Name</Label>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between bg-muted/50"
+                    onClick={() => setShowBankModal(true)}
                   >
-                    <SelectTrigger className="bg-muted/50">
-                      <SelectValue placeholder="Select bank" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="058">GTBank</SelectItem>
-                      <SelectItem value="044">Access Bank</SelectItem>
-                      <SelectItem value="011">First Bank</SelectItem>
-                      <SelectItem value="033">UBA</SelectItem>
-                      <SelectItem value="057">Zenith Bank</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    {bankForm.bankName || 'Select bank...'}
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
                 </div>
+
+                {/* Account Number */}
                 <div className="space-y-2">
                   <Label htmlFor="accountNumber">Account Number</Label>
                   <Input
                     id="accountNumber"
-                    placeholder="0123456789"
+                    placeholder="Enter 10-digit account number"
                     value={bankForm.accountNumber}
-                    onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
+                    onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    maxLength={10}
+                    inputMode="numeric"
                     className="bg-muted/50"
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="accountName">Account Name</Label>
-                  <Input
-                    id="accountName"
-                    placeholder="Business Name Ltd"
-                    value={bankForm.accountName}
-                    onChange={(e) => setBankForm({ ...bankForm, accountName: e.target.value })}
-                    className="bg-muted/50"
-                  />
+                  {isResolvingAccount && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Verifying account...
+                    </div>
+                  )}
+                  {resolvedAccountName && (
+                    <div className="flex items-center gap-2 text-xs text-green-500">
+                      <Check className="h-3 w-3" /> {resolvedAccountName}
+                    </div>
+                  )}
+                  {bankForm.accountNumber.length === 10 && !isResolvingAccount && !resolvedAccountName && bankForm.bankCode && (
+                    <div className="flex items-center gap-2 text-xs text-destructive">
+                      <AlertCircle className="h-3 w-3" /> Could not verify account
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="pt-4 border-t border-border">
-                <Button onClick={handleUpdateBank} className="gradient-primary" disabled={updateBankAccount.isPending}>
+                <Button
+                  onClick={handleUpdateBank}
+                  className="gradient-primary"
+                  disabled={updateBankAccount.isPending || !resolvedAccountName}
+                >
                   {updateBankAccount.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                   Update Bank Account
                 </Button>
               </div>
             </CardContent>
           </Card>
+
+          {/* Bank Search Modal */}
+          <Dialog open={showBankModal} onOpenChange={setShowBankModal}>
+            <DialogContent className="max-h-[80vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle>Select Bank</DialogTitle>
+              </DialogHeader>
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search banks..."
+                  value={bankSearch}
+                  onChange={(e) => setBankSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex-1 overflow-y-auto max-h-[50vh] space-y-1">
+                {banksLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : filteredBanks.length === 0 ? (
+                  <p className="text-center text-sm text-muted-foreground py-8">No banks found</p>
+                ) : (
+                  filteredBanks.map((bank) => (
+                    <button
+                      key={bank.code}
+                      className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-secondary transition-colors flex items-center justify-between"
+                      onClick={() => {
+                        setBankForm(prev => ({ ...prev, bankCode: bank.code, bankName: bank.name }));
+                        setShowBankModal(false);
+                        setBankSearch('');
+                      }}
+                    >
+                      <span className="text-sm">{bank.name}</span>
+                      {bankForm.bankCode === bank.code && <Check className="h-4 w-4 text-primary" />}
+                    </button>
+                  ))
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* API Keys */}
@@ -304,7 +422,7 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
-        {/* Webhooks (Placeholder) */}
+        {/* Webhooks */}
         <TabsContent value="webhooks" className="space-y-6">
           <Card className="border-border bg-card">
             <CardHeader>
@@ -314,14 +432,44 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="p-4 bg-muted rounded-lg text-center">
-                <p className="text-muted-foreground">Webhook configuration will be available soon.</p>
+              <div className="space-y-2">
+                <Label htmlFor="webhookUrl">Webhook URL</Label>
+                <Input
+                  id="webhookUrl"
+                  placeholder="https://yourserver.com/webhook"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  className="bg-muted/50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  We'll send POST requests with payment event data to this URL
+                </p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                <p className="text-sm font-medium mb-2">Events we'll notify you about:</p>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• <code className="text-xs">payment.success</code> — Payment confirmed on-chain</li>
+                  <li>• <code className="text-xs">payment.failed</code> — Payment expired or failed</li>
+                  <li>• <code className="text-xs">settlement.completed</code> — Funds settled to your account</li>
+                </ul>
+              </div>
+
+              <div className="pt-4 border-t border-border">
+                <Button
+                  onClick={() => updateProfile.mutate({ webhookUrl })}
+                  className="gradient-primary"
+                  disabled={updateProfile.isPending}
+                >
+                  {updateProfile.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  Save Webhook URL
+                </Button>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Settlements (Placeholder) */}
+        {/* Settlements */}
         <TabsContent value="settlements" className="space-y-6">
           <Card className="border-border bg-card">
             <CardHeader>
@@ -331,8 +479,150 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="p-4 bg-muted rounded-lg text-center">
-                <p className="text-muted-foreground">Settlement preferences will be available soon.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>Settlement Type</Label>
+                  <Select value={settlementType} onValueChange={(v) => setSettlementType(v as SettlementType)}>
+                    <SelectTrigger className="bg-muted/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="FIAT">Fiat (NGN to bank account)</SelectItem>
+                      <SelectItem value="CRYPTO">Crypto (to wallet address)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Settlement Frequency</Label>
+                  <Select value={settlementFrequency} onValueChange={(v) => setSettlementFrequency(v as SettlementFrequency)}>
+                    <SelectTrigger className="bg-muted/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="INSTANT">Instant</SelectItem>
+                      <SelectItem value="SIX_HOURLY">Every 6 hours</SelectItem>
+                      <SelectItem value="TWELVE_HOURLY">Every 12 hours</SelectItem>
+                      <SelectItem value="EOD">End of day</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                <p className="text-sm text-muted-foreground">
+                  Current Fee Rate: <span className="font-semibold text-foreground">{((profile?.feeBps ?? 150) / 100).toFixed(2)}%</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Fee rate is set by the platform. Contact support to request a custom rate.
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-border">
+                <Button
+                  onClick={() => updateSettlementPrefs.mutate({ settlementType, settlementFrequency })}
+                  className="gradient-primary"
+                  disabled={updateSettlementPrefs.isPending}
+                >
+                  {updateSettlementPrefs.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  Save Preferences
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Settlement Addresses (only relevant for crypto) */}
+          <Card className="border-border bg-card">
+            <CardHeader>
+              <CardTitle>Settlement Addresses</CardTitle>
+              <CardDescription>
+                Manage your crypto wallet addresses for receiving settlements (one per chain)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Existing addresses */}
+              {settlementAddresses && settlementAddresses.length > 0 && (
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Chain</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Address</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {settlementAddresses.map((addr) => (
+                        <tr key={addr.id} className="hover:bg-muted/20">
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                              {addr.chain}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm">{addr.address.slice(0, 10)}...{addr.address.slice(-6)}</span>
+                              <button
+                                onClick={() => { navigator.clipboard.writeText(addr.address); toast.success('Address copied'); }}
+                                className="text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => deleteAddress.mutate(addr.id)}
+                              disabled={deleteAddress.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Add new address */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Select value={newAddressChain} onValueChange={setNewAddressChain}>
+                  <SelectTrigger className="bg-muted/50 w-full sm:w-[180px]">
+                    <SelectValue placeholder="Select chain" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tron">Tron</SelectItem>
+                    <SelectItem value="base">Base</SelectItem>
+                    <SelectItem value="arbitrum">Arbitrum</SelectItem>
+                    <SelectItem value="solana">Solana</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Wallet address"
+                  value={newAddressValue}
+                  onChange={(e) => setNewAddressValue(e.target.value)}
+                  className="bg-muted/50 flex-1"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!newAddressChain || !newAddressValue) {
+                      toast.error('Please select a chain and enter an address');
+                      return;
+                    }
+                    upsertAddress.mutate(
+                      { chain: newAddressChain, address: newAddressValue },
+                      { onSuccess: () => { setNewAddressChain(''); setNewAddressValue(''); } }
+                    );
+                  }}
+                  disabled={upsertAddress.isPending}
+                >
+                  {upsertAddress.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+                  Add Address
+                </Button>
               </div>
             </CardContent>
           </Card>

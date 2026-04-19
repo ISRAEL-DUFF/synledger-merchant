@@ -50,6 +50,9 @@ export function PaymentTable({ payments, showViewAll, onViewAll }: PaymentTableP
                 Chain
               </th>
               <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Payout
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Customer
               </th>
               <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -94,6 +97,28 @@ export function PaymentTable({ payments, showViewAll, onViewAll }: PaymentTableP
                 <td className="px-6 py-4 whitespace-nowrap">
                   {payment.chain ? (
                     <ChainBadge chain={payment.chain} />
+                  ) : (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {payment.payoutStatus ? (
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                      payment.payoutStatus === 'PAID_OUT'
+                        ? 'bg-success/15 text-success border-success/30'
+                        : payment.payoutStatus === 'INCLUDED_IN_BATCH'
+                        ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                        : 'bg-warning/15 text-warning border-warning/30'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        payment.payoutStatus === 'PAID_OUT' ? 'bg-success'
+                        : payment.payoutStatus === 'INCLUDED_IN_BATCH' ? 'bg-blue-400'
+                        : 'bg-warning animate-pulse'
+                      }`} />
+                      {payment.payoutStatus === 'PAID_OUT' ? 'Paid Out'
+                        : payment.payoutStatus === 'INCLUDED_IN_BATCH' ? 'In Batch'
+                        : 'Pending'}
+                    </span>
                   ) : (
                     <span className="text-sm text-muted-foreground">—</span>
                   )}

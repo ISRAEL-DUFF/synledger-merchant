@@ -3,8 +3,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { StatsCard } from '@/components/StatsCard';
 import { PaymentTable } from '@/components/PaymentTable';
 import { RevenueChart } from '@/components/RevenueChart';
-import { useMerchantAnalytics, useMerchantPayments } from '@/hooks/useMerchant';
-import { DollarSign, ArrowUpRight, TrendingUp, Clock, AlertCircle } from 'lucide-react';
+import { useMerchantAnalytics, useMerchantPayments, useMerchantBalances } from '@/hooks/useMerchant';
+import { DollarSign, ArrowUpRight, TrendingUp, Clock, AlertCircle, Wallet } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 function formatCurrency(amount: number): string {
@@ -23,8 +23,11 @@ export default function Dashboard() {
 
   const { data: analytics, isLoading: analyticsLoading, error: analyticsError } = useMerchantAnalytics();
   const { data: paymentsData, isLoading: paymentsLoading } = useMerchantPayments({ limit: 8 });
+  const { data: balancesData } = useMerchantBalances();
 
   const recentPayments = paymentsData?.payments || [];
+  const balances = balancesData?.balances || [];
+  const totalCryptoBalance = balances.reduce((sum, b) => sum + parseFloat(b.receivable || '0'), 0);
   const isLoading = analyticsLoading || paymentsLoading;
   const error = analyticsError;
 
@@ -96,6 +99,28 @@ export default function Dashboard() {
           icon={Clock}
         />
       </div>
+
+      {/* Crypto Balance Banner */}
+      {balances.length > 0 && (
+        <div
+          className="rounded-xl border border-border bg-card p-6 flex items-center justify-between cursor-pointer hover:border-primary/30 transition-colors"
+          onClick={() => navigate('/wallet')}
+        >
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-primary/10">
+              <Wallet className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Crypto Balance</p>
+              <p className="text-2xl font-bold">${totalCryptoBalance.toFixed(2)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-primary font-medium">
+            <span>{balances.length} token{balances.length !== 1 ? 's' : ''} across {new Set(balances.map(b => b.chain)).size} chain{new Set(balances.map(b => b.chain)).size !== 1 ? 's' : ''}</span>
+            <ArrowUpRight className="w-4 h-4" />
+          </div>
+        </div>
+      )}
 
       {/* Chart */}
       <RevenueChart data={analytics.chartData} />
