@@ -8,6 +8,8 @@ import { wagmiAdapter, queryClient } from "./lib/web3modal-config";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import Payments from "./pages/Payments";
 import Settlements from "./pages/Settlements";
@@ -26,6 +28,8 @@ function AppRoutes() {
     <Routes>
       {/* Public routes */}
       <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
+      <Route path="/forgot-password" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <ForgotPassword />} />
       <Route path="/checkout" element={<Checkout2 />} />
 
       {/* Protected routes - Dashboard */}

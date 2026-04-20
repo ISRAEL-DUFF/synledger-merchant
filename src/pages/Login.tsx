@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Lock, ArrowRight, Zap, Shield, Globe } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Zap, Shield, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function Login() {
-  const [secretKey, setSecretKey] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -17,23 +18,14 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!secretKey.trim()) {
-      toast.error('Please enter your secret key');
-      return;
-    }
-
-    if (!secretKey.startsWith('sk_')) {
-      toast.error('Invalid secret key format. Keys start with sk_live_ or sk_test_');
+    if (!email.trim() || !password.trim()) {
+      toast.error('Please enter your email and password');
       return;
     }
 
     setIsLoading(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Mock login - in production this would validate against the API
-    const success = await login(secretKey);
+    const success = await login(email.trim(), password);
 
     if (success) {
       toast.success('Welcome back!');
@@ -41,10 +33,6 @@ export default function Login() {
     }
 
     setIsLoading(false);
-  };
-
-  const handleDemoLogin = () => {
-    setSecretKey('sk_test_demo123456789');
   };
 
   return (
@@ -115,27 +103,46 @@ export default function Login() {
             <div className="mb-8">
               <h2 className="text-2xl font-bold mb-2">Merchant Login</h2>
               <p className="text-muted-foreground">
-                Enter your secret API key to access your dashboard
+                Sign in with your email and password
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="secretKey">Secret Key</Label>
+                <Label htmlFor="email">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="hello@acme.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10 h-12 bg-muted/50 border-border focus:border-primary"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link to="/forgot-password" className="text-xs text-primary hover:underline">
+                    Forgot password?
+                  </Link>
+                </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    id="secretKey"
+                    id="password"
                     type="password"
-                    placeholder="sk_live_xxxxxxxxxx"
-                    value={secretKey}
-                    onChange={(e) => setSecretKey(e.target.value)}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 h-12 bg-muted/50 border-border focus:border-primary"
+                    required
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Your secret key was provided when you registered. Never share it publicly.
-                </p>
               </div>
 
               <Button
@@ -157,21 +164,11 @@ export default function Login() {
               </Button>
             </form>
 
-            <div className="mt-6 pt-6 border-t border-border">
-              <Button
-                variant="ghost"
-                className="w-full text-muted-foreground hover:text-foreground"
-                onClick={handleDemoLogin}
-              >
-                Use demo credentials
-              </Button>
-            </div>
-
-            <p className="mt-6 text-center text-sm text-muted-foreground">
+            <p className="mt-6 pt-6 border-t border-border text-center text-sm text-muted-foreground">
               Don't have an account?{' '}
-              <a href="#" className="text-primary hover:underline">
+              <Link to="/register" className="text-primary hover:underline">
                 Register your business
-              </a>
+              </Link>
             </p>
           </div>
         </div>

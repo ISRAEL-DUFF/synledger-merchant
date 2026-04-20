@@ -26,10 +26,10 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     } else {
-        // Try to get token from localStorage if not provided explicit
-        const storedKey = localStorage.getItem('merchant_secret_key');
-        if (storedKey) {
-            headers['Authorization'] = `Bearer ${storedKey}`;
+        // Try to get JWT token from localStorage if not provided explicitly
+        const storedToken = localStorage.getItem('merchant_token');
+        if (storedToken) {
+            headers['Authorization'] = `Bearer ${storedToken}`;
         }
     }
 
