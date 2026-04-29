@@ -6,8 +6,9 @@ import { useMemo } from 'react';
 import { ethers } from 'ethers';
 import { useWalletClient, usePublicClient } from 'wagmi';
 import { CONTRACTS, ABIS, getContractByName } from '../lib/contracts';
+import type { SupportedChain } from '../lib/chains-config';
 
-export function useContract(contractName: 'escrowManager' | 'expenseVerifier', chain: 'ethereum' | 'arbitrum' | 'base' | 'tron' | 'solana' = 'base') {
+export function useContract(contractName: 'escrowManager' | 'expenseVerifier', chain: SupportedChain = 'base') {
     const { data: walletClient } = useWalletClient();
     const publicClient = usePublicClient();
 

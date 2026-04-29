@@ -8,7 +8,6 @@ import {
   getCurrentRpcUrl,
   getCurrentBlockExplorer,
   getHexChainId,
-  CHAIN_CONFIGS,
 } from '@/lib/chains-config';
 
 // Re-export types for convenience

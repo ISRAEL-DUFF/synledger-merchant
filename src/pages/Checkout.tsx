@@ -11,6 +11,7 @@ import {
   TokenSymbol,
   isTestnet,
   WalletConfig,
+  getDefaultToken,
 } from '@/lib/chains-config';
 import { toast } from 'sonner';
 import { getContractByName } from '@/lib/contracts';
@@ -64,7 +65,7 @@ const Checkout = () => {
   const urlToken = searchParams.get('token') as TokenSymbol | null;
 
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedToken, setSelectedToken] = useState<TokenSymbol>(urlToken || 'USDT'); // TODO: fetch default token via app-config from backend
+  const [selectedToken, setSelectedToken] = useState<TokenSymbol>(urlToken || getDefaultToken());
 
   // Payment Data State
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
@@ -225,7 +226,7 @@ const Checkout = () => {
     if (selectedChain) {
       const availableTokens = selectedChain.tokens;
       if (!availableTokens.includes(selectedToken)) {
-        setSelectedToken(availableTokens[0] || 'USDT'); // TODO: this would come from app-config from backend
+        setSelectedToken(availableTokens[0] || getDefaultToken());
       }
     }
   }, [selectedChain, selectedToken]);
