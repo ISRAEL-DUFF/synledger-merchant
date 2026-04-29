@@ -2,10 +2,17 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { initAppConfig } from "./lib/appConfig";
+import { initializeAppKit } from "./lib/web3modal-config";
 
-// Eagerly preload backend config before rendering
-initAppConfig().catch(() => {
-  console.warn('App config preload failed, will retry on component mount');
-});
+async function bootstrap() {
+  try {
+    await initAppConfig();
+  } catch {
+    console.warn('App config preload failed, continuing with fallback chain metadata');
+  }
 
-createRoot(document.getElementById("root")!).render(<App />);
+  initializeAppKit();
+  createRoot(document.getElementById("root")!).render(<App />);
+}
+
+bootstrap();

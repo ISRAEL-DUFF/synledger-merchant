@@ -6,6 +6,13 @@
                 { "key": "X-Frame-Options", "value": "ALLOWALL" },
                 { "key": "Content-Security-Policy", "value": "frame-ancestors *;" }
             ]
+        },
+        {
+            "source": "/checkout2",
+            "headers": [
+                { "key": "X-Frame-Options", "value": "ALLOWALL" },
+                { "key": "Content-Security-Policy", "value": "frame-ancestors *;" }
+            ]
         }
     ],
     "rewrites": [

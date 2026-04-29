@@ -3,7 +3,7 @@
 // Copied and adapted from frontend-v2.1
 
 import { parseUnits, encodeFunctionData, Hash } from 'viem';
-import { SupportedChain, TokenSymbol, getCurrentChainId, getTokenDecimals } from '@/lib/chains-config';
+import { SupportedChain, TokenSymbol, getTokenDecimals, isEvmChain } from '@/lib/chains-config';
 import { getContractByName, ABIS } from '@/lib/contracts';
 import { ethers } from 'ethers';
 import { getWalletClient, getPublicClient } from '@wagmi/core';
@@ -129,12 +129,11 @@ export async function buildAndSignPayment(
 async function buildTransactionForChain(params: PaymentParams): Promise<any> {
     const { chain } = params;
 
-    switch (chain) {
-        case 'ethereum':
-        case 'arbitrum':
-        case 'base':
-            return buildEVMTransaction(params);
+    if (isEvmChain(chain)) {
+        return buildEVMTransaction(params);
+    }
 
+    switch (chain) {
         case 'tron':
             return buildTronTransaction(params);
 
@@ -487,7 +486,7 @@ async function signAndSendTransaction(
 
     try {
         // For EVM chains
-        if (['ethereum', 'arbitrum', 'base'].includes(chain)) {
+        if (isEvmChain(chain)) {
             const ethereum = await getEthereumProvider();
 
             // Chain ID check removed - validated by UI component

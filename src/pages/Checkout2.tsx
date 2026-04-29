@@ -11,7 +11,10 @@ import {
     isTestnet,
     SupportedChain,
     WalletConfig,
-    getWalletsForChain
+    getWalletsForChain,
+    getCurrentChainId,
+    isEvmChain,
+    getDefaultToken,
 } from '@/lib/chains-config';
 import { toast } from 'sonner';
 import { buildAndSignPayment } from '@/lib/paymentHelper';
@@ -86,7 +89,7 @@ const Checkout = () => {
     const urlParentOrigin = searchParams.get('parentOrigin');
 
     const [isOpen, setIsOpen] = useState(false);
-    const [selectedToken, setSelectedToken] = useState<TokenSymbol>('USDC'); // TODO: fetch default token via app-config from backend
+    const [selectedToken, setSelectedToken] = useState<TokenSymbol>(urlToken || getDefaultToken());
 
     // Deposit Session Hook is moved down
     // Payment Data State
@@ -269,7 +272,7 @@ const Checkout = () => {
         if (selectedChain) {
             const availableTokens = selectedChain.tokens;
             if (!availableTokens.includes(selectedToken)) {
-                setSelectedToken(availableTokens[0] || 'USDT'); // TODO: this would come from app-config from backend
+                setSelectedToken(availableTokens[0] || getDefaultToken());
             }
         }
     }, [selectedChain, selectedToken]);
@@ -527,17 +530,14 @@ const Checkout = () => {
             toast.loading('Preparing transaction...');
 
             // Pre-flight check: Ensure wallet is on the correct chain
-            if (['ethereum', 'arbitrum', 'base'].includes(params.chain)) {
-                // Get target chain ID
-                const targetChainId = getEnabledChains().find(c => c.id === params.chain)?.chainId[isTestnet() ? 'testnet' : 'mainnet'];
+            if (isEvmChain(params.chain)) {
+                const targetChainId = getCurrentChainId(params.chain);
 
                 // Get current chain ID from wagmi hook (reactive state)
                 // We use the one from useAccount() higher up in the component
 
                 console.log("TARGET CHAIN ID>>>>>>>>>", targetChainId);
                 console.log("CURRENT CHAIN ID (Wagmi)>>>>>>>>>", currentChainId);
-                console.log("IS TESTNET>>>>>>>>>", isTestnet());
-
                 if (currentChainId !== targetChainId) {
                     console.log(`🔄 Chain mismatch detected. Switching from ${currentChainId} to ${targetChainId}...`);
                     toast.dismiss();
@@ -686,11 +686,47 @@ const Checkout = () => {
         await createSession({ paymentId: data.payment.id });
     }
 
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        toast.success('Copied to clipboard');
-        setTimeout(() => setCopied(false), 2000);
+    const fallbackCopyText = (text: string): boolean => {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        textarea.setSelectionRange(0, text.length);
+
+        try {
+            return document.execCommand('copy');
+        } finally {
+            document.body.removeChild(textarea);
+        }
+    };
+
+    const copyToClipboard = async (text: string) => {
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const ok = fallbackCopyText(text);
+                if (!ok) throw new Error('Fallback copy failed');
+            }
+
+            setCopied(true);
+            toast.success('Copied to clipboard');
+            setTimeout(() => setCopied(false), 2000);
+        } catch (error) {
+            const ok = fallbackCopyText(text);
+            if (ok) {
+                setCopied(true);
+                toast.success('Copied to clipboard');
+                setTimeout(() => setCopied(false), 2000);
+                return;
+            }
+
+            console.error('Failed to copy: ', error);
+            toast.error('Copy blocked by browser permissions. Please copy manually.');
+        }
     };
 
     const getBlockExplorerUrl = (chain: Chain | null, hash: string) => {
@@ -853,8 +889,8 @@ const Checkout = () => {
                                             } else {
                                                 if (isConnected) {
                                                     // If it's an EVM chain, ensure we are on the right network
-                                                    if (['ethereum', 'arbitrum', 'base'].includes(chain.id)) {
-                                                        const targetChainId = getEnabledChains().find(c => c.id === chain.id)?.chainId[isTestnet() ? 'testnet' : 'mainnet'];
+                                                    if (isEvmChain(chain.id)) {
+                                                        const targetChainId = getCurrentChainId(chain.id);
                                                         if (currentChainId !== targetChainId) {
                                                             console.log(`🔄 Switching to ${chain.name} (Chain ID: ${targetChainId})...`);
                                                             try {

@@ -4,6 +4,7 @@ import EscrowManagerABI from '../abis/PaymentEscrow.json';
 import ExpenseVerifierABI from '../abis/ExpenseVerifier.json';
 import ERC20ABI from '../abis/IERC20.json';
 import { getAppConfigSync, getChainConfigSync, type ChainConfigEntry } from './appConfig';
+import type { SupportedChain } from './chains-config';
 
 // ============================================
 // Contract ABIs (remain on frontend — static JSON)
@@ -48,7 +49,7 @@ export function getUSDCAddressTron(): string {
 }
 
 
-export function getContractByName(name: 'ethereum' | 'arbitrum' | 'base' | 'bsc' | 'tron' | 'solana') {
+export function getContractByName(name: SupportedChain) {
     const chainConfig = getChainConfigSync(name);
 
     if (!chainConfig) {

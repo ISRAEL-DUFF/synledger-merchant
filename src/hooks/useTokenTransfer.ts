@@ -9,7 +9,7 @@ import {
   getTokenDecimals,
   getExplorerTxUrl,
   getCurrentRpcUrl,
-  NETWORK_ENV,
+  isEvmChain,
 } from '@/lib/chains-config';
 
 interface TransferState {
@@ -201,6 +201,8 @@ export function useTokenTransfer(): UseTokenTransferReturn {
         case 'ethereum':
         case 'base':
         case 'arbitrum':
+        case 'bsc':
+        case 'polygon':
           txHash = await transferEVM(chain, token, amount, toAddress);
           break;
         case 'tron':
@@ -210,6 +212,10 @@ export function useTokenTransfer(): UseTokenTransferReturn {
           txHash = await transferSolana(token, amount, toAddress);
           break;
         default:
+          if (isEvmChain(chain)) {
+            txHash = await transferEVM(chain, token, amount, toAddress);
+            break;
+          }
           throw new Error(`Unsupported chain: ${chain}`);
       }
 
