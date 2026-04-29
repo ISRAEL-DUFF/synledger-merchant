@@ -738,7 +738,11 @@ const Checkout = () => {
         return (
             <div className="min-h-screen bg-gradient-to-br from-background via-secondary/10 to-background flex items-center justify-center p-4">
                 <div className="text-center">
-                    <h1 className="text-4xl font-bold text-foreground mb-4">iSpend Payment Widget</h1>
+                    <img
+                        src="/images/ispend_logo_white_bg_crop-removebg-preview.png"
+                        alt="iSpend Payment Widget"
+                        className="h-16 mx-auto mb-4"
+                    />
                     <p className="text-muted-foreground mb-8">Checkout experience for crypto payments</p>
 
                     <button
@@ -1391,7 +1395,11 @@ const Checkout = () => {
                 <div className="border-t border-border p-4 bg-muted/50 text-center rounded-b-2xl">
                     <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                         <span>Secured by</span>
-                        <span className="font-bold gradient-primary-text">CryptoExpense</span>
+                        <img
+                            src="/images/ispend_logo_white_bg_crop-removebg-preview.png"
+                            alt="iSpend"
+                            className="h-5"
+                        />
                     </div>
                 </div>
 

@@ -8,10 +8,10 @@
    All colors in HSL format */
 
 @layer base {
-  /* Light mode (default) - Paystack-like clean theme */
+  /* Light mode - iSpend TMA theme */
   :root {
-    /* Core backgrounds - clean white/gray */
-    --background: 0 0% 100%;
+    /* Core backgrounds */
+    --background: 220 20% 97%;
     --foreground: 222 47% 11%;
 
     /* Cards & surfaces */
@@ -21,48 +21,51 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    /* Primary - Blue from gradient */
-    --primary: 217 91% 60%;
+    /* Primary - Teal */
+    --primary: 174 72% 40%;
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary - Purple accent */
-    --secondary: 271 81% 56%;
-    --secondary-foreground: 0 0% 100%;
+    /* Secondary */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
 
     /* Muted surfaces */
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
 
-    /* Accent */
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
+    /* Accent - Teal */
+    --accent: 174 72% 40%;
+    --accent-foreground: 0 0% 100%;
 
     /* Status colors */
     --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
-    
+
     --warning: 38 92% 50%;
-    --warning-foreground: 222 47% 11%;
-    
+    --warning-foreground: 0 0% 100%;
+
+    --pending: 217 91% 60%;
+    --pending-foreground: 0 0% 100%;
+
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
     /* Borders & inputs */
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 217 91% 60%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 174 72% 40%;
 
     --radius: 0.75rem;
 
     /* Sidebar - light */
     --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 215 16% 47%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-foreground: 220 9% 46%;
+    --sidebar-primary: 174 72% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent: 220 14% 96%;
     --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 214 32% 91%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 174 72% 40%;
 
     /* Chain colors */
     --chain-tron: 354 100% 50%;
@@ -71,64 +74,72 @@
     --chain-solana: 270 100% 65%;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(217, 91%, 60%) 0%, hsl(271, 81%, 56%) 100%);
-    --gradient-surface: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, hsl(210, 40%, 98%) 100%);
-    --gradient-hero: linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(210, 40%, 98%) 50%, hsl(0, 0%, 100%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(174, 72%, 40%) 0%, hsl(200, 80%, 50%) 100%);
+    --gradient-surface: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, hsl(220, 20%, 97%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(174, 40%, 96%) 50%, hsl(0, 0%, 100%) 100%);
+
+    /* Shadows */
+    --shadow-glow: 0 4px 40px -8px hsl(174 72% 40% / 0.3);
+    --shadow-card: 0 4px 24px -4px hsl(220 30% 15% / 0.08);
+    --shadow-elevated: 0 12px 40px -8px hsl(220 30% 15% / 0.15);
   }
 
-  /* Dark mode - Original fintech dark theme */
+  /* Dark mode - iSpend TMA theme */
   .dark {
     /* Core backgrounds */
     --background: 222 47% 6%;
     --foreground: 210 40% 98%;
 
     /* Cards & surfaces */
-    --card: 222 47% 8%;
+    --card: 222 47% 9%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222 47% 10%;
+    --popover: 222 47% 9%;
     --popover-foreground: 210 40% 98%;
 
-    /* Primary - Blue gradient start */
-    --primary: 217 91% 60%;
+    /* Primary - Teal (brighter in dark) */
+    --primary: 174 72% 45%;
     --primary-foreground: 222 47% 6%;
 
-    /* Secondary - Purple gradient end */
-    --secondary: 271 81% 56%;
+    /* Secondary */
+    --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 98%;
 
     /* Muted surfaces */
-    --muted: 222 47% 12%;
+    --muted: 217 33% 17%;
     --muted-foreground: 215 20% 65%;
 
-    /* Accent - Gradient blend */
-    --accent: 250 70% 58%;
-    --accent-foreground: 210 40% 98%;
+    /* Accent - Teal */
+    --accent: 174 72% 45%;
+    --accent-foreground: 222 47% 6%;
 
     /* Status colors */
     --success: 160 84% 39%;
     --success-foreground: 210 40% 98%;
-    
+
     --warning: 38 92% 50%;
     --warning-foreground: 222 47% 6%;
-    
-    --destructive: 0 84% 60%;
+
+    --pending: 217 91% 60%;
+    --pending-foreground: 210 40% 98%;
+
+    --destructive: 0 62% 50%;
     --destructive-foreground: 210 40% 98%;
 
     /* Borders & inputs */
-    --border: 222 47% 16%;
-    --input: 222 47% 14%;
-    --ring: 217 91% 60%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 174 72% 45%;
 
     /* Sidebar */
     --sidebar-background: 222 47% 5%;
     --sidebar-foreground: 215 20% 65%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-primary: 174 72% 45%;
+    --sidebar-primary-foreground: 222 47% 6%;
     --sidebar-accent: 222 47% 10%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 222 47% 12%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 174 72% 45%;
 
     /* Chain colors */
     --chain-tron: 354 100% 50%;
@@ -137,9 +148,14 @@
     --chain-solana: 270 100% 65%;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(217, 91%, 60%) 0%, hsl(271, 81%, 56%) 100%);
-    --gradient-surface: linear-gradient(180deg, hsl(222, 47%, 8%) 0%, hsl(271, 60%, 8%) 100%);
-    --gradient-hero: linear-gradient(135deg, hsl(222, 47%, 6%) 0%, hsl(271, 50%, 10%) 50%, hsl(222, 47%, 6%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(174, 72%, 45%) 0%, hsl(200, 80%, 55%) 100%);
+    --gradient-surface: linear-gradient(180deg, hsl(222, 47%, 9%) 0%, hsl(220, 45%, 7%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(222, 47%, 6%) 0%, hsl(174, 40%, 8%) 50%, hsl(222, 47%, 6%) 100%);
+
+    /* Shadows */
+    --shadow-glow: 0 4px 40px -8px hsl(174 72% 45% / 0.4);
+    --shadow-card: 0 4px 24px -4px hsl(0 0% 0% / 0.3);
+    --shadow-elevated: 0 12px 40px -8px hsl(0 0% 0% / 0.4);
   }
 }
 
@@ -155,11 +171,11 @@
 
 @layer utilities {
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(217, 91%, 60%) 0%, hsl(271, 81%, 56%) 100%);
+    background: linear-gradient(135deg, hsl(174, 72%, 40%) 0%, hsl(200, 80%, 50%) 100%);
   }
 
   .gradient-primary-text {
-    background: linear-gradient(135deg, hsl(217, 91%, 60%) 0%, hsl(271, 81%, 56%) 100%);
+    background: linear-gradient(135deg, hsl(174, 72%, 40%) 0%, hsl(200, 80%, 50%) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -167,34 +183,34 @@
 
   /* Theme-aware surface gradient */
   .gradient-surface {
-    background: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, hsl(210, 40%, 98%) 100%);
+    background: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, hsl(220, 20%, 97%) 100%);
   }
   .dark .gradient-surface {
-    background: linear-gradient(180deg, hsl(222, 47%, 8%) 0%, hsl(271, 60%, 8%) 100%);
+    background: linear-gradient(180deg, hsl(222, 47%, 9%) 0%, hsl(220, 45%, 7%) 100%);
   }
 
   /* Theme-aware hero gradient */
   .gradient-hero {
-    background: linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(210, 40%, 98%) 50%, hsl(0, 0%, 100%) 100%);
+    background: linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(174, 40%, 96%) 50%, hsl(0, 0%, 100%) 100%);
   }
   .dark .gradient-hero {
-    background: linear-gradient(135deg, hsl(222, 47%, 6%) 0%, hsl(271, 50%, 10%) 50%, hsl(222, 47%, 6%) 100%);
+    background: linear-gradient(135deg, hsl(222, 47%, 6%) 0%, hsl(174, 40%, 8%) 50%, hsl(222, 47%, 6%) 100%);
   }
 
   /* Theme-aware glass effect */
   .glass {
     backdrop-filter: blur(12px);
     background: hsla(0, 0%, 100%, 0.8);
-    border: 1px solid hsla(214, 32%, 91%, 0.5);
+    border: 1px solid hsla(220, 13%, 91%, 0.5);
   }
   .dark .glass {
     backdrop-filter: blur(12px);
-    background: hsla(222, 47%, 8%, 0.8);
-    border: 1px solid hsla(222, 47%, 20%, 0.3);
+    background: hsla(222, 47%, 9%, 0.8);
+    border: 1px solid hsla(217, 33%, 20%, 0.3);
   }
 
   .glow-primary {
-    box-shadow: 0 0 40px hsla(217, 91%, 60%, 0.3), 0 0 80px hsla(271, 81%, 56%, 0.2);
+    box-shadow: var(--shadow-glow);
   }
 
   .animate-fade-in {
