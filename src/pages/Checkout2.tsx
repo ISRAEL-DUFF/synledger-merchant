@@ -743,7 +743,7 @@ const Checkout = () => {
                         alt="iSpend Payment Widget"
                         className="h-16 mx-auto mb-4"
                     />
-                    <p className="text-muted-foreground mb-8">Checkout experience for crypto payments</p>
+                    <p className="text-muted-foreground mb-8">The easy checkout experience for crypto payments</p>
 
                     <button
                         onClick={() => setIsOpen(true)}
@@ -810,7 +810,7 @@ const Checkout = () => {
                         <img
                             src={paymentData.merchantLogo}
                             alt={paymentData.merchantName}
-                            className="w-16 h-16 rounded-xl bg-white/10 border-2 border-white/20"
+                            className="w-32 h-16 rounded-xl bg-white/10 border-2 border-white/20"
                         />
                         <div className="text-primary-foreground">
                             <p className="text-sm opacity-90">Pay to</p>
